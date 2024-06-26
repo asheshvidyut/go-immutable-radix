@@ -1,6 +1,6 @@
 module github.com/hashicorp/go-immutable-radix
 
-go 1.18
+go 1.21
 
 require (
 	github.com/hashicorp/go-uuid v1.0.3
