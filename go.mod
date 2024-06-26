@@ -1,4 +1,4 @@
-module github.com/hashicorp/go-immutable-radix/v2
+module github.com/hashicorp/go-immutable-radix
 
 go 1.18
 
