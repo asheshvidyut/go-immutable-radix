@@ -1,4 +1,4 @@
-module github.com/hashicorp/go-immutable-radix
+module github.com/hashicorp/go-immutable-radix/v3
 
 go 1.21
 
