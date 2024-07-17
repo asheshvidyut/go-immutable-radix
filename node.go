@@ -84,6 +84,11 @@ func (n *Node) updateMinMaxLeaves() {
 
 func (n *Node) computeLinks() {
 	n.updateMinMaxLeaves()
+	if len(n.edges) > 0 {
+		if n.minLeaf != n.edges[0].node.minLeaf {
+			n.minLeaf.setNextLeaf(n.edges[0].node.minLeaf)
+		}
+	}
 	for itr := 0; itr < len(n.edges); itr++ {
 		maxLFirst, _ := n.edges[itr].node.MaximumLeaf()
 		var minLSecond *LeafNode
@@ -109,7 +114,6 @@ func (n *Node) addEdge(e edge) {
 		copy(n.edges[idx+1:], n.edges[idx:num])
 		n.edges[idx] = e
 	}
-	n.computeLinks()
 }
 
 // Minimum is used to return the minimum value in the tree
@@ -135,7 +139,6 @@ func (n *Node) replaceEdge(e edge) {
 	})
 	if idx < num && n.edges[idx].label == e.label {
 		n.edges[idx].node = e.node
-		n.computeLinks()
 		return
 	}
 	panic("replacing missing edge")
