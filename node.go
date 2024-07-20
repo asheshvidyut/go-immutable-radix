@@ -38,6 +38,7 @@ type edge struct {
 type Node struct {
 	// mutateCh is closed if this node is modified
 	mutateCh chan struct{}
+	snapshot bool
 
 	// leaf is used to store possible leaf
 	leaf    *LeafNode
@@ -51,6 +52,14 @@ type Node struct {
 	// We avoid a fully materialized slice to save memory,
 	// since in most cases we expect to be sparse
 	edges edges
+}
+
+func (n *Node) GetSnapshot() bool {
+	return n.snapshot
+}
+
+func (n *Node) SetSnapshot(snapshot bool) {
+	n.snapshot = snapshot
 }
 
 func (n *Node) isLeaf() bool {
@@ -167,38 +176,17 @@ func (n *Node) delEdge(label byte) {
 	}
 }
 
-func (l *LeafNode) Clone() *LeafNode {
-
-	if l == nil {
-		return nil
-	}
-
-	valCopy := l.val
-
-	if _, ok := valCopy.(*Tree); ok {
-		valCopy = l.val.(*Tree).Clone()
-	}
-
-	return &LeafNode{
-		mutateCh: l.mutateCh,
-		key:      l.key,
-		val:      valCopy,
-	}
-}
-
-func (n *Node) Clone() *Node {
+func (n *Node) Snapshot() *Node {
 	nc := &Node{
 		mutateCh: n.mutateCh,
-		leaf:     n.leaf.Clone(),
+		leaf:     n.leaf,
+		minLeaf:  n.minLeaf,
+		maxLeaf:  n.maxLeaf,
 		prefix:   n.prefix,
+		snapshot: true,
 	}
-	nc.minLeaf = nc.leaf
-	nc.maxLeaf = nc.leaf
 	nc.edges = make(edges, len(n.edges))
-	for itr, ed := range n.edges {
-		nc.edges[itr] = edge{ed.label, ed.node.Clone()}
-	}
-	nc.computeLinks()
+	copy(nc.edges, n.edges)
 	return nc
 }
 
@@ -307,7 +295,7 @@ func (n *Node) Maximum() ([]byte, interface{}, bool) {
 // Iterator is used to return an iterator at
 // the given node to walk the tree
 func (n *Node) Iterator() *Iterator {
-	return &Iterator{node: n}
+	return &Iterator{node: n, snapshotRoot: n.snapshot}
 }
 
 // ReverseIterator is used to return an iterator at
