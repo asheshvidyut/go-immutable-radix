@@ -39,7 +39,6 @@ type edge struct {
 type Node struct {
 	// mutateCh is closed if this node is modified
 	mutateCh chan struct{}
-	snapshot atomic.Bool
 
 	// leaf is used to store possible leaf
 	leaf    *LeafNode
@@ -54,14 +53,6 @@ type Node struct {
 	// since in most cases we expect to be sparse
 	edges              edges
 	maxLeafIdInSubTree int64
-}
-
-func (n *Node) GetSnapshot() bool {
-	return n.snapshot.Load()
-}
-
-func (n *Node) SetSnapshot(snapshot bool) {
-	n.snapshot.Store(snapshot)
 }
 
 func (n *Node) isLeaf() bool {
@@ -186,20 +177,6 @@ func (n *Node) delEdge(label byte) {
 	}
 }
 
-func (n *Node) Snapshot() *Node {
-	nc := &Node{
-		mutateCh: n.mutateCh,
-		leaf:     n.leaf,
-		minLeaf:  n.minLeaf,
-		maxLeaf:  n.maxLeaf,
-		prefix:   n.prefix,
-	}
-	nc.snapshot.Store(true)
-	nc.edges = make(edges, len(n.edges))
-	copy(nc.edges, n.edges)
-	return nc
-}
-
 func (n *Node) GetWatch(k []byte) (<-chan struct{}, interface{}, bool) {
 	search := k
 	watch := n.mutateCh
@@ -305,7 +282,7 @@ func (n *Node) Maximum() ([]byte, interface{}, bool) {
 // Iterator is used to return an iterator at
 // the given node to walk the tree
 func (n *Node) Iterator() *Iterator {
-	return &Iterator{node: n, snapshotRoot: n.snapshot.Load(), rootMaxLeafId: n.maxLeafIdInSubTree}
+	return &Iterator{node: n, rootMaxLeafId: n.maxLeafIdInSubTree}
 }
 
 // ReverseIterator is used to return an iterator at
