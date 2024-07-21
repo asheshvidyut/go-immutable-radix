@@ -3,6 +3,8 @@ package iradix
 import (
 	"bytes"
 	"sort"
+	"sync/atomic"
+	"unsafe"
 )
 
 // WalkFn is used when walking the tree. Takes a
@@ -10,11 +12,21 @@ import (
 // be terminated.
 type WalkFn func(k []byte, v interface{}) bool
 
-// leafNode is used to represent a value
-type leafNode struct {
+// LeafNode is used to represent a value
+type LeafNode struct {
 	mutateCh chan struct{}
 	key      []byte
 	val      interface{}
+	nextLeaf unsafe.Pointer
+	id       int64
+}
+
+func (n *LeafNode) setNextLeaf(l *LeafNode) {
+	atomic.StorePointer(&n.nextLeaf, unsafe.Pointer(l))
+}
+
+func (n *LeafNode) getNextLeaf() *LeafNode {
+	return (*LeafNode)(atomic.LoadPointer(&n.nextLeaf))
 }
 
 // edge is used to represent an edge node
@@ -27,9 +39,12 @@ type edge struct {
 type Node struct {
 	// mutateCh is closed if this node is modified
 	mutateCh chan struct{}
+	snapshot atomic.Bool
 
 	// leaf is used to store possible leaf
-	leaf *leafNode
+	leaf    *LeafNode
+	minLeaf *LeafNode
+	maxLeaf *LeafNode
 
 	// prefix is the common prefix we ignore
 	prefix []byte
@@ -37,11 +52,63 @@ type Node struct {
 	// Edges should be stored in-order for iteration.
 	// We avoid a fully materialized slice to save memory,
 	// since in most cases we expect to be sparse
-	edges edges
+	edges              edges
+	maxLeafIdInSubTree int64
+}
+
+func (n *Node) GetSnapshot() bool {
+	return n.snapshot.Load()
+}
+
+func (n *Node) SetSnapshot(snapshot bool) {
+	n.snapshot.Store(snapshot)
 }
 
 func (n *Node) isLeaf() bool {
 	return n.leaf != nil
+}
+
+func (n *Node) updateMinMaxLeaves() {
+	n.minLeaf = nil
+	n.maxLeaf = nil
+	if n.leaf != nil {
+		n.minLeaf = n.leaf
+		n.maxLeafIdInSubTree = n.leaf.id
+	} else if len(n.edges) > 0 {
+		n.minLeaf = n.edges[0].node.minLeaf
+		if n.edges[0].node.minLeaf != nil {
+			n.maxLeafIdInSubTree = n.edges[0].node.minLeaf.id
+		}
+	}
+	if len(n.edges) > 0 {
+		n.maxLeaf = n.edges[len(n.edges)-1].node.maxLeaf
+	}
+	if n.maxLeaf == nil && n.leaf != nil {
+		n.maxLeaf = n.leaf
+	}
+}
+
+func (n *Node) computeLinks() {
+	n.updateMinMaxLeaves()
+	if len(n.edges) > 0 {
+		if n.minLeaf != n.edges[0].node.minLeaf {
+			n.minLeaf.setNextLeaf(n.edges[0].node.minLeaf)
+		}
+	}
+	for itr := 0; itr < len(n.edges); itr++ {
+		if n.edges[itr].node.isLeaf() {
+			n.edges[itr].node.maxLeafIdInSubTree = max(n.edges[itr].node.leaf.id, n.edges[itr].node.maxLeafIdInSubTree)
+		}
+		n.maxLeafIdInSubTree = max(n.maxLeafIdInSubTree, n.edges[itr].node.maxLeafIdInSubTree)
+		maxLFirst, _ := n.edges[itr].node.MaximumLeaf()
+		var minLSecond *LeafNode
+		if itr+1 < len(n.edges) {
+			minLSecond, _ = n.edges[itr+1].node.MinimumLeaf()
+		}
+		if maxLFirst != nil {
+			maxLFirst.setNextLeaf(minLSecond)
+		}
+	}
 }
 
 func (n *Node) addEdge(e edge) {
@@ -54,6 +121,22 @@ func (n *Node) addEdge(e edge) {
 		copy(n.edges[idx+1:], n.edges[idx:num])
 		n.edges[idx] = e
 	}
+}
+
+// Minimum is used to return the minimum value in the tree
+func (n *Node) MinimumLeaf() (*LeafNode, bool) {
+	if n.minLeaf != nil {
+		return n.minLeaf, true
+	}
+	return nil, false
+}
+
+// Maximum is used to return the maximum value in the tree
+func (n *Node) MaximumLeaf() (*LeafNode, bool) {
+	if n.maxLeaf != nil {
+		return n.maxLeaf, true
+	}
+	return nil, false
 }
 
 func (n *Node) replaceEdge(e edge) {
@@ -103,6 +186,20 @@ func (n *Node) delEdge(label byte) {
 	}
 }
 
+func (n *Node) Snapshot() *Node {
+	nc := &Node{
+		mutateCh: n.mutateCh,
+		leaf:     n.leaf,
+		minLeaf:  n.minLeaf,
+		maxLeaf:  n.maxLeaf,
+		prefix:   n.prefix,
+	}
+	nc.snapshot.Store(true)
+	nc.edges = make(edges, len(n.edges))
+	copy(nc.edges, n.edges)
+	return nc
+}
+
 func (n *Node) GetWatch(k []byte) (<-chan struct{}, interface{}, bool) {
 	search := k
 	watch := n.mutateCh
@@ -142,7 +239,7 @@ func (n *Node) Get(k []byte) (interface{}, bool) {
 // LongestPrefix is like Get, but instead of an
 // exact match, it will return the longest prefix match.
 func (n *Node) LongestPrefix(k []byte) ([]byte, interface{}, bool) {
-	var last *leafNode
+	var last *LeafNode
 	search := k
 	for {
 		// Look for a leaf node
@@ -208,7 +305,7 @@ func (n *Node) Maximum() ([]byte, interface{}, bool) {
 // Iterator is used to return an iterator at
 // the given node to walk the tree
 func (n *Node) Iterator() *Iterator {
-	return &Iterator{node: n}
+	return &Iterator{node: n, snapshotRoot: n.snapshot.Load(), rootMaxLeafId: n.maxLeafIdInSubTree}
 }
 
 // ReverseIterator is used to return an iterator at
