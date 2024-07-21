@@ -62,7 +62,6 @@ func (i *Iterator) SeekPrefixWatch(prefix []byte) (watch <-chan struct{}) {
 	n := i.node
 	watch = n.mutateCh
 	search := prefix
-	i.maxLeaf = n.maxLeaf
 	for {
 		// Check for key exhaustion
 		if len(search) == 0 {
