@@ -13,7 +13,7 @@ type Iterator struct {
 	key            []byte
 	seekLowerBound bool
 	snapshotRoot   bool
-	maxLeaf        *LeafNode
+	rootMaxLeafId  int64
 }
 
 // SeekPrefixWatch is used to seek the iterator to a given prefix
@@ -330,15 +330,9 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 
 	if i.seekLowerBound {
 		for i.leafNode != nil {
-			if i.leafNode == i.maxLeaf {
-				res := i.leafNode
-				i.leafNode = nil
-				i.node = nil
-				if bytes.Compare(i.leafNode.key, i.key) >= 0 {
-					return res.key, res.val, true
-				}
-
-				return nil, zero, false
+			if i.leafNode.id > i.rootMaxLeafId {
+				i.leafNode = i.leafNode.getNextLeaf()
+				continue
 			}
 			if bytes.Compare(i.leafNode.key, i.key) >= 0 {
 				res := i.leafNode
@@ -361,24 +355,23 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 		return nil, zero, false
 	}
 
-	if i.leafNode == i.maxLeaf {
-		res := i.leafNode
-		i.leafNode = nil
-		i.node = nil
-		if res != nil && bytes.HasPrefix(res.key, i.key) {
+	for i.leafNode != nil {
+		if i.leafNode != nil && bytes.HasPrefix(i.leafNode.key, i.key) {
+			if i.leafNode.id > i.rootMaxLeafId {
+				i.leafNode = i.leafNode.getNextLeaf()
+				continue
+			}
+			res := i.leafNode
+			i.leafNode = i.leafNode.getNextLeaf()
+			if i.leafNode == nil {
+				i.node = nil
+			}
 			return res.key, res.val, true
-		}
-
-		return nil, zero, false
-	}
-
-	if i.leafNode != nil && bytes.HasPrefix(i.leafNode.key, i.key) {
-		res := i.leafNode
-		i.leafNode = i.leafNode.getNextLeaf()
-		if i.leafNode == nil {
+		} else {
+			i.leafNode = nil
 			i.node = nil
+			break
 		}
-		return res.key, res.val, true
 	}
 
 	i.leafNode = nil
