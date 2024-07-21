@@ -1,8 +1,10 @@
 package iradix
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -1935,6 +1937,31 @@ func BenchmarkInsertIRadix(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		uuid1, _ := uuid.GenerateUUID()
 		r, _, _ = r.Insert([]byte(uuid1), n)
+	}
+}
+
+func BenchmarkInsertIRadixWords(b *testing.B) {
+	file, err := os.Open("words.txt")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a new scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// Read the file line by line
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+	}
+
+	b.ResetTimer()
+	r := New()
+	for _, line := range lines {
+		r, _, _ = r.Insert([]byte(line), 0)
 	}
 }
 
