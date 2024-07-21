@@ -18,6 +18,7 @@ type LeafNode struct {
 	key      []byte
 	val      interface{}
 	nextLeaf unsafe.Pointer
+	id       int64
 }
 
 func (n *LeafNode) setNextLeaf(l *LeafNode) {
@@ -51,7 +52,8 @@ type Node struct {
 	// Edges should be stored in-order for iteration.
 	// We avoid a fully materialized slice to save memory,
 	// since in most cases we expect to be sparse
-	edges edges
+	edges              edges
+	maxLeafIdInSubTree int64
 }
 
 func (n *Node) GetSnapshot() bool {
@@ -71,8 +73,12 @@ func (n *Node) updateMinMaxLeaves() {
 	n.maxLeaf = nil
 	if n.leaf != nil {
 		n.minLeaf = n.leaf
+		n.maxLeafIdInSubTree = n.leaf.id
 	} else if len(n.edges) > 0 {
 		n.minLeaf = n.edges[0].node.minLeaf
+		if n.edges[0].node.minLeaf != nil {
+			n.maxLeafIdInSubTree = n.edges[0].node.minLeaf.id
+		}
 	}
 	if len(n.edges) > 0 {
 		n.maxLeaf = n.edges[len(n.edges)-1].node.maxLeaf
@@ -90,6 +96,10 @@ func (n *Node) computeLinks() {
 		}
 	}
 	for itr := 0; itr < len(n.edges); itr++ {
+		if n.edges[itr].node.isLeaf() {
+			n.edges[itr].node.maxLeafIdInSubTree = max(n.edges[itr].node.leaf.id, n.edges[itr].node.maxLeafIdInSubTree)
+		}
+		n.maxLeafIdInSubTree = max(n.maxLeafIdInSubTree, n.edges[itr].node.maxLeafIdInSubTree)
 		maxLFirst, _ := n.edges[itr].node.MaximumLeaf()
 		var minLSecond *LeafNode
 		if itr+1 < len(n.edges) {
@@ -295,7 +305,7 @@ func (n *Node) Maximum() ([]byte, interface{}, bool) {
 // Iterator is used to return an iterator at
 // the given node to walk the tree
 func (n *Node) Iterator() *Iterator {
-	return &Iterator{node: n, snapshotRoot: n.snapshot.Load()}
+	return &Iterator{node: n, snapshotRoot: n.snapshot.Load(), rootMaxLeafId: n.maxLeafIdInSubTree}
 }
 
 // ReverseIterator is used to return an iterator at

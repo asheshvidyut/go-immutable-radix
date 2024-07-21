@@ -49,6 +49,7 @@ func CopyLeaf(l *LeafNode) *LeafNode {
 		mutateCh: l.mutateCh,
 		key:      l.key,
 		val:      l.val,
+		id:       l.id,
 	}
 	return ll
 }
