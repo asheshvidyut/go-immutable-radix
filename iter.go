@@ -13,6 +13,7 @@ type Iterator struct {
 	key            []byte
 	seekLowerBound bool
 	snapshotRoot   bool
+	maxLeaf        *LeafNode
 }
 
 // SeekPrefixWatch is used to seek the iterator to a given prefix
@@ -61,6 +62,7 @@ func (i *Iterator) SeekPrefixWatch(prefix []byte) (watch <-chan struct{}) {
 	n := i.node
 	watch = n.mutateCh
 	search := prefix
+	i.maxLeaf = n.maxLeaf
 	for {
 		// Check for key exhaustion
 		if len(search) == 0 {
@@ -328,6 +330,16 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 
 	if i.seekLowerBound {
 		for i.leafNode != nil {
+			if i.leafNode == i.maxLeaf {
+				res := i.leafNode
+				i.leafNode = nil
+				i.node = nil
+				if bytes.Compare(i.leafNode.key, i.key) >= 0 {
+					return res.key, res.val, true
+				}
+
+				return nil, zero, false
+			}
 			if bytes.Compare(i.leafNode.key, i.key) >= 0 {
 				res := i.leafNode
 				i.leafNode = i.leafNode.getNextLeaf()
@@ -345,6 +357,17 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 
 		i.leafNode = nil
 		i.node = nil
+
+		return nil, zero, false
+	}
+
+	if i.leafNode == i.maxLeaf {
+		res := i.leafNode
+		i.leafNode = nil
+		i.node = nil
+		if res != nil && bytes.HasPrefix(res.key, i.key) {
+			return res.key, res.val, true
+		}
 
 		return nil, zero, false
 	}
