@@ -96,7 +96,7 @@ func (n *Node) computeLinks() {
 		if itr+1 < len(n.edges) {
 			minLSecond, _ = n.edges[itr+1].node.MinimumLeaf()
 		}
-		if maxLFirst != nil {
+		if maxLFirst != nil && minLSecond != nil {
 			maxLFirst.setNextLeaf(minLSecond)
 		}
 	}
