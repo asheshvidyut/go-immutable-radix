@@ -264,10 +264,7 @@ func (t *Txn) insert(n *Node, k, search []byte, v interface{}) (*Node, interface
 			mutateCh: make(chan struct{}),
 			key:      k,
 			val:      v,
-			id:       int64(t.size),
-		}
-		if !didUpdate {
-			nc.leaf.id++
+			id:       int64(t.size) + 1,
 		}
 		nc.computeLinks()
 		return nc, oldVal, didUpdate
