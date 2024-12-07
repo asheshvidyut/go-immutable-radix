@@ -7,7 +7,8 @@ type rawIterator struct {
 	// node is the starting node in the tree for the iterator.
 	node *Node
 
-	// stack keeps track of edges in the frontier.
+	// stack keeps track of nodes in the frontier, along with the path
+	// accumulated so far.
 	stack []rawStackEntry
 
 	// pos is the current position of the iterator.
@@ -18,11 +19,11 @@ type rawIterator struct {
 	path string
 }
 
-// rawStackEntry is used to keep track of the cumulative common path as well as
-// its associated edges in the frontier.
+// rawStackEntry is used to keep track of the cumulative path as well as
+// its associated nodes in the frontier.
 type rawStackEntry struct {
 	path  string
-	edges edges
+	nodes []*Node
 }
 
 // Front returns the current node that has been iterated to.
@@ -42,37 +43,45 @@ func (i *rawIterator) Next() {
 	if i.stack == nil && i.node != nil {
 		i.stack = []rawStackEntry{
 			{
-				edges: edges{
-					edge{node: i.node},
-				},
+				path:  "",
+				nodes: []*Node{i.node},
 			},
 		}
 	}
 
 	for len(i.stack) > 0 {
-		// Inspect the last element of the stack.
+		// Inspect the last element of the stack
 		n := len(i.stack)
 		last := i.stack[n-1]
-		elem := last.edges[0].node
 
-		// Update the stack.
-		if len(last.edges) > 1 {
-			i.stack[n-1].edges = last.edges[1:]
+		// Take the first node from last.nodes
+		elem := last.nodes[0]
+
+		// Update the stack
+		if len(last.nodes) > 1 {
+			i.stack[n-1].nodes = last.nodes[1:]
 		} else {
 			i.stack = i.stack[:n-1]
 		}
 
-		// Push the edges onto the frontier.
-		if len(elem.edges) > 0 {
-			path := last.path + string(elem.prefix)
-			i.stack = append(i.stack, rawStackEntry{path, elem.edges})
+		// Compute the new path
+		newPath := last.path + string(elem.prefix)
+
+		// Push the children onto the frontier if any
+		if len(elem.children) > 0 {
+			i.stack = append(i.stack, rawStackEntry{
+				path:  newPath,
+				nodes: elem.children,
+			})
 		}
 
+		// Update the current position and path
 		i.pos = elem
-		i.path = last.path + string(elem.prefix)
+		i.path = newPath
 		return
 	}
 
+	// No more nodes
 	i.pos = nil
 	i.path = ""
 }

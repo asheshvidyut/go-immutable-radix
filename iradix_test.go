@@ -31,12 +31,10 @@ func CopyNode(n *Node) *Node {
 	if n.leaf != nil {
 		nn.leaf = CopyLeaf(n.leaf)
 	}
-	if len(n.edges) != 0 {
-		nn.edges = make([]edge, len(n.edges))
-		for idx, edge := range n.edges {
-			nn.edges[idx].label = edge.label
-			nn.edges[idx].node = CopyNode(edge.node)
-		}
+	if len(n.children) != 0 {
+		nn.children = make([]*Node, len(n.children))
+		copy(nn.children, n.children)
+		nn.bitmap = n.bitmap
 	}
 	return nn
 }

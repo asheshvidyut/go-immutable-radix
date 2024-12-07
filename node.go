@@ -2,7 +2,7 @@ package iradix
 
 import (
 	"bytes"
-	"sort"
+	"math/bits"
 )
 
 // WalkFn is used when walking the tree. Takes a
@@ -37,70 +37,157 @@ type Node struct {
 	// Edges should be stored in-order for iteration.
 	// We avoid a fully materialized slice to save memory,
 	// since in most cases we expect to be sparse
-	edges edges
+	bitmap   [4]uint64
+	children []*Node
 }
 
 func (n *Node) isLeaf() bool {
 	return n.leaf != nil
 }
 
-func (n *Node) addEdge(e edge) {
-	num := len(n.edges)
-	idx := sort.Search(num, func(i int) bool {
-		return n.edges[i].label >= e.label
-	})
-	n.edges = append(n.edges, e)
-	if idx != num {
-		copy(n.edges[idx+1:], n.edges[idx:num])
-		n.edges[idx] = e
-	}
+// setBit sets the bit for a given label
+func setBit(bitmap *[4]uint64, label byte) {
+	block := label / 64
+	bitPos := label % 64
+	bitmap[block] |= 1 << bitPos
 }
 
-func (n *Node) replaceEdge(e edge) {
-	num := len(n.edges)
-	idx := sort.Search(num, func(i int) bool {
-		return n.edges[i].label >= e.label
-	})
-	if idx < num && n.edges[idx].label == e.label {
-		n.edges[idx].node = e.node
-		return
-	}
-	panic("replacing missing edge")
+// clearBit clears the bit for a given label
+func clearBit(bitmap *[4]uint64, label byte) {
+	block := label / 64
+	bitPos := label % 64
+	mask := uint64(1) << bitPos
+	bitmap[block] &^= mask
 }
 
-func (n *Node) getEdge(label byte) (int, *Node) {
-	num := len(n.edges)
-	idx := sort.Search(num, func(i int) bool {
-		return n.edges[i].label >= label
-	})
-	if idx < num && n.edges[idx].label == label {
-		return idx, n.edges[idx].node
+// bitSet checks if bit for label is set
+func bitSet(bitmap [4]uint64, label byte) bool {
+	block := label / 64
+	bitPos := label % 64
+	return (bitmap[block] & (1 << bitPos)) != 0
+}
+
+// rankOf computes how many bits are set before foundLabel
+func (n *Node) rankOf(foundLabel uint8) int {
+	block := foundLabel / 64
+	bitPos := foundLabel % 64
+	mask := uint64(1) << bitPos
+
+	rank := 0
+	for i := 0; i < int(block); i++ {
+		rank += bits.OnesCount64(n.bitmap[i])
 	}
-	return -1, nil
+	rank += bits.OnesCount64(n.bitmap[block] & (mask - 1))
+	return rank
+}
+
+// findInsertionIndex finds the index where a label should be inserted.
+// Similar to lower bound search in a sorted array, but using a bitmap.
+func (n *Node) findInsertionIndex(label byte) int {
+	block := label / 64
+	bitPos := label % 64
+
+	// Check current block from bitPos upwards
+	curBlock := n.bitmap[block] >> bitPos
+	if curBlock != 0 {
+		// There is at least one set bit >= bitPos in this block
+		offset := bits.TrailingZeros64(curBlock)
+		foundLabel := uint8(block*64 + bitPos + uint8(offset))
+		if foundLabel >= label {
+			return n.rankOf(foundLabel)
+		}
+	}
+
+	// Check subsequent blocks
+	for b := block + 1; b < 4; b++ {
+		if n.bitmap[b] != 0 {
+			offset := bits.TrailingZeros64(n.bitmap[b])
+			foundLabel := uint8(b*64 + uint8(offset))
+			// foundLabel > label by definition
+			return n.rankOf(foundLabel)
+		}
+	}
+
+	// No existing child >= label, so insert at end
+	return len(n.children)
+}
+
+func (n *Node) addEdge(label byte, child *Node) {
+	idx := n.findInsertionIndex(label)
+	n.children = append(n.children, child)
+	if idx != len(n.children)-1 {
+		copy(n.children[idx+1:], n.children[idx:len(n.children)-1])
+		n.children[idx] = child
+	}
+	setBit(&n.bitmap, label)
 }
 
 func (n *Node) getLowerBoundEdge(label byte) (int, *Node) {
-	num := len(n.edges)
-	idx := sort.Search(num, func(i int) bool {
-		return n.edges[i].label >= label
-	})
-	// we want lower bound behavior so return even if it's not an exact match
-	if idx < num {
-		return idx, n.edges[idx].node
+	// Similar logic to find the first child with label >= input
+	block := label / 64
+	bitPos := label % 64
+
+	curBlock := n.bitmap[block] >> bitPos
+	if curBlock != 0 {
+		offset := bits.TrailingZeros64(curBlock)
+		foundLabel := uint8(block*64 + bitPos + uint8(offset))
+		rank := n.rankOf(foundLabel)
+		return rank, n.children[rank]
 	}
+
+	for b := block + 1; b < 4; b++ {
+		if n.bitmap[b] != 0 {
+			offset := bits.TrailingZeros64(n.bitmap[b])
+			foundLabel := uint8(b*64 + uint8(offset))
+			rank := n.rankOf(foundLabel)
+			return rank, n.children[rank]
+		}
+	}
+
+	// No child >= label
 	return -1, nil
 }
 
-func (n *Node) delEdge(label byte) {
-	num := len(n.edges)
-	idx := sort.Search(num, func(i int) bool {
-		return n.edges[i].label >= label
-	})
-	if idx < num && n.edges[idx].label == label {
-		copy(n.edges[idx:], n.edges[idx+1:])
-		n.edges[len(n.edges)-1] = edge{}
-		n.edges = n.edges[:len(n.edges)-1]
+func (n *Node) getChildRank(label byte) int {
+	block := label / 64
+	bitPos := label % 64
+	mask := uint64(1) << bitPos
+
+	rank := 0
+	for i := 0; i < int(block); i++ {
+		rank += bits.OnesCount64(n.bitmap[i])
 	}
+	rank += bits.OnesCount64(n.bitmap[block] & (mask - 1))
+	return rank
+}
+
+func (n *Node) replaceEdge(label byte, child *Node) {
+	if !bitSet(n.bitmap, label) {
+		panic("replacing missing edge")
+	}
+
+	// Compute rank
+	rank := n.getChildRank(label)
+	n.children[rank] = child
+}
+
+func (n *Node) getEdge(label byte) (int, *Node) {
+	if !bitSet(n.bitmap, label) {
+		return -1, nil
+	}
+	rank := n.getChildRank(label)
+	return rank, n.children[rank]
+}
+
+func (n *Node) delEdge(label byte) {
+	if !bitSet(n.bitmap, label) {
+		return
+	}
+	rank := n.getChildRank(label)
+	copy(n.children[rank:], n.children[rank+1:])
+	n.children[len(n.children)-1] = nil
+	n.children = n.children[:len(n.children)-1]
+	clearBit(&n.bitmap, label)
 }
 
 func (n *Node) GetWatch(k []byte) (<-chan struct{}, interface{}, bool) {
@@ -180,8 +267,8 @@ func (n *Node) Minimum() ([]byte, interface{}, bool) {
 		if n.isLeaf() {
 			return n.leaf.key, n.leaf.val, true
 		}
-		if len(n.edges) > 0 {
-			n = n.edges[0].node
+		if len(n.children) > 0 {
+			n = n.children[0]
 		} else {
 			break
 		}
@@ -192,8 +279,8 @@ func (n *Node) Minimum() ([]byte, interface{}, bool) {
 // Maximum is used to return the maximum value in the tree
 func (n *Node) Maximum() ([]byte, interface{}, bool) {
 	for {
-		if num := len(n.edges); num > 0 {
-			n = n.edges[num-1].node
+		if num := len(n.children); num > 0 {
+			n = n.children[num-1]
 			continue
 		}
 		if n.isLeaf() {
@@ -305,9 +392,9 @@ func recursiveWalk(n *Node, fn WalkFn) bool {
 		return true
 	}
 
-	// Recurse on the children
-	for _, e := range n.edges {
-		if recursiveWalk(e.node, fn) {
+	// Iterate over children
+	for _, child := range n.children {
+		if recursiveWalk(child, fn) {
 			return true
 		}
 	}
@@ -323,10 +410,8 @@ func reverseRecursiveWalk(n *Node, fn WalkFn) bool {
 		return true
 	}
 
-	// Recurse on the children in reverse order
-	for i := len(n.edges) - 1; i >= 0; i-- {
-		e := n.edges[i]
-		if reverseRecursiveWalk(e.node, fn) {
+	for i := len(n.children) - 1; i >= 0; i-- {
+		if reverseRecursiveWalk(n.children[i], fn) {
 			return true
 		}
 	}

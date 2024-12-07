@@ -187,12 +187,12 @@ func (t *Txn) writeNode(n *Node, forLeafUpdate bool) *Node {
 		nc.prefix = make([]byte, len(n.prefix))
 		copy(nc.prefix, n.prefix)
 	}
-	if len(n.edges) != 0 {
-		nc.edges = make([]edge, len(n.edges))
-		copy(nc.edges, n.edges)
+	if len(n.children) != 0 {
+		nc.children = make([]*Node, len(n.children))
+		copy(nc.children, n.children)
+		nc.bitmap = n.bitmap
 	}
 
-	// Mark this node as writable.
 	t.writable.Add(nc, nil)
 	return nc
 }
@@ -215,9 +215,8 @@ func (t *Txn) trackChannelsAndCount(n *Node) int {
 		t.trackChannel(n.leaf.mutateCh)
 	}
 
-	// Recurse on the children
-	for _, e := range n.edges {
-		leaves += t.trackChannelsAndCount(e.node)
+	for _, child := range n.children {
+		leaves += t.trackChannelsAndCount(child)
 	}
 	return leaves
 }
@@ -228,8 +227,7 @@ func (t *Txn) mergeChild(n *Node) {
 	// Mark the child node as being mutated since we are about to abandon
 	// it. We don't need to mark the leaf since we are retaining it if it
 	// is there.
-	e := n.edges[0]
-	child := e.node
+	child := n.children[0]
 	if t.trackMutate {
 		t.trackChannel(child.mutateCh)
 	}
@@ -237,12 +235,13 @@ func (t *Txn) mergeChild(n *Node) {
 	// Merge the nodes.
 	n.prefix = concat(n.prefix, child.prefix)
 	n.leaf = child.leaf
-	if len(child.edges) != 0 {
-		n.edges = make([]edge, len(child.edges))
-		copy(n.edges, child.edges)
+	if len(child.children) != 0 {
+		n.children = make([]*Node, len(child.children))
+		copy(n.children, child.children)
 	} else {
-		n.edges = nil
+		n.children = nil
 	}
+	n.bitmap = child.bitmap
 }
 
 // insert does a recursive insertion
@@ -266,35 +265,34 @@ func (t *Txn) insert(n *Node, k, search []byte, v interface{}) (*Node, interface
 	}
 
 	// Look for the edge
-	idx, child := n.getEdge(search[0])
+	_, child := n.getEdge(search[0])
 
 	// No edge, create one
 	if child == nil {
-		e := edge{
-			label: search[0],
-			node: &Node{
-				mutateCh: make(chan struct{}),
-				leaf: &leafNode{
-					mutateCh: make(chan struct{}),
-					key:      k,
-					val:      v,
-				},
-				prefix: search,
-			},
-		}
 		nc := t.writeNode(n, false)
-		nc.addEdge(e)
+		newChild := &Node{
+			mutateCh: make(chan struct{}),
+			leaf: &leafNode{
+				mutateCh: make(chan struct{}),
+				key:      k,
+				val:      v,
+			},
+			prefix: search,
+		}
+		nc.addEdge(search[0], newChild)
 		return nc, nil, false
 	}
 
 	// Determine longest prefix of the search key on match
 	commonPrefix := longestPrefix(search, child.prefix)
 	if commonPrefix == len(child.prefix) {
+		label := search[0]
 		search = search[commonPrefix:]
 		newChild, oldVal, didUpdate := t.insert(child, k, search, v)
 		if newChild != nil {
 			nc := t.writeNode(n, false)
-			nc.edges[idx].node = newChild
+			rank := nc.getChildRank(label)
+			nc.children[rank] = newChild
 			return nc, oldVal, didUpdate
 		}
 		return nil, oldVal, didUpdate
@@ -306,47 +304,34 @@ func (t *Txn) insert(n *Node, k, search []byte, v interface{}) (*Node, interface
 		mutateCh: make(chan struct{}),
 		prefix:   search[:commonPrefix],
 	}
-	nc.replaceEdge(edge{
-		label: search[0],
-		node:  splitNode,
-	})
+	ncLabel := search[0]
+	nc.replaceEdge(ncLabel, splitNode)
 
-	// Restore the existing child node
 	modChild := t.writeNode(child, false)
-	splitNode.addEdge(edge{
-		label: modChild.prefix[commonPrefix],
-		node:  modChild,
-	})
+	splitNode.addEdge(modChild.prefix[commonPrefix], modChild)
 	modChild.prefix = modChild.prefix[commonPrefix:]
 
-	// Create a new leaf node
 	leaf := &leafNode{
 		mutateCh: make(chan struct{}),
 		key:      k,
 		val:      v,
 	}
-
-	// If the new key is a subset, add to to this node
 	search = search[commonPrefix:]
 	if len(search) == 0 {
 		splitNode.leaf = leaf
 		return nc, nil, false
 	}
 
-	// Create a new edge for the node
-	splitNode.addEdge(edge{
-		label: search[0],
-		node: &Node{
-			mutateCh: make(chan struct{}),
-			leaf:     leaf,
-			prefix:   search,
-		},
+	splitNode.addEdge(search[0], &Node{
+		mutateCh: make(chan struct{}),
+		leaf:     leaf,
+		prefix:   search,
 	})
 	return nc, nil, false
 }
 
 // delete does a recursive deletion
-func (t *Txn) delete(parent, n *Node, search []byte) (*Node, *leafNode) {
+func (t *Txn) delete(n *Node, search []byte) (*Node, *leafNode) {
 	// Check for key exhaustion
 	if len(search) == 0 {
 		if !n.isLeaf() {
@@ -363,7 +348,7 @@ func (t *Txn) delete(parent, n *Node, search []byte) (*Node, *leafNode) {
 		nc.leaf = nil
 
 		// Check if this node should be merged
-		if n != t.root && len(nc.edges) == 1 {
+		if n != t.root && len(nc.children) == 1 {
 			t.mergeChild(nc)
 		}
 		return nc, oldLeaf
@@ -371,14 +356,14 @@ func (t *Txn) delete(parent, n *Node, search []byte) (*Node, *leafNode) {
 
 	// Look for an edge
 	label := search[0]
-	idx, child := n.getEdge(label)
+	_, child := n.getEdge(label)
 	if child == nil || !bytes.HasPrefix(search, child.prefix) {
 		return nil, nil
 	}
 
 	// Consume the search prefix
 	search = search[len(child.prefix):]
-	newChild, leaf := t.delete(n, child, search)
+	newChild, leaf := t.delete(child, search)
 	if newChild == nil {
 		return nil, nil
 	}
@@ -388,34 +373,38 @@ func (t *Txn) delete(parent, n *Node, search []byte) (*Node, *leafNode) {
 	// the !nc.isLeaf() check in the logic just below. This is pretty subtle,
 	// so be careful if you change any of the logic here.
 	nc := t.writeNode(n, false)
-
-	// Delete the edge if the node has no edges
-	if newChild.leaf == nil && len(newChild.edges) == 0 {
+	if newChild.leaf == nil && len(newChild.children) == 0 {
 		nc.delEdge(label)
-		if n != t.root && len(nc.edges) == 1 && !nc.isLeaf() {
+		if n != t.root && len(nc.children) == 1 && !nc.isLeaf() {
 			t.mergeChild(nc)
 		}
 	} else {
-		nc.edges[idx].node = newChild
+		// Replace child
+		rank := nc.getChildRank(label)
+		nc.children[rank] = newChild
 	}
 	return nc, leaf
 }
 
 // delete does a recursive deletion
-func (t *Txn) deletePrefix(parent, n *Node, search []byte) (*Node, int) {
+func (t *Txn) deletePrefix(n *Node, search []byte) (*Node, int) {
+	// Check for key exhaustion
 	// Check for key exhaustion
 	if len(search) == 0 {
 		nc := t.writeNode(n, true)
 		if n.isLeaf() {
 			nc.leaf = nil
 		}
-		nc.edges = nil
-		return nc, t.trackChannelsAndCount(n)
+		count := t.trackChannelsAndCount(n)
+		nc.children = nil
+		var empty [4]uint64
+		nc.bitmap = empty
+		return nc, count
 	}
 
 	// Look for an edge
 	label := search[0]
-	idx, child := n.getEdge(label)
+	_, child := n.getEdge(label)
 	// We make sure that either the child node's prefix starts with the search term, or the search term starts with the child node's prefix
 	// Need to do both so that we can delete prefixes that don't correspond to any node in the tree
 	if child == nil || (!bytes.HasPrefix(child.prefix, search) && !bytes.HasPrefix(search, child.prefix)) {
@@ -428,7 +417,7 @@ func (t *Txn) deletePrefix(parent, n *Node, search []byte) (*Node, int) {
 	} else {
 		search = search[len(child.prefix):]
 	}
-	newChild, numDeletions := t.deletePrefix(n, child, search)
+	newChild, numDeletions := t.deletePrefix(child, search)
 	if newChild == nil {
 		return nil, 0
 	}
@@ -438,15 +427,14 @@ func (t *Txn) deletePrefix(parent, n *Node, search []byte) (*Node, int) {
 	// so be careful if you change any of the logic here.
 
 	nc := t.writeNode(n, false)
-
-	// Delete the edge if the node has no edges
-	if newChild.leaf == nil && len(newChild.edges) == 0 {
+	if newChild.leaf == nil && len(newChild.children) == 0 {
 		nc.delEdge(label)
-		if n != t.root && len(nc.edges) == 1 && !nc.isLeaf() {
+		if n != t.root && len(nc.children) == 1 && !nc.isLeaf() {
 			t.mergeChild(nc)
 		}
 	} else {
-		nc.edges[idx].node = newChild
+		rank := nc.getChildRank(label)
+		nc.children[rank] = newChild
 	}
 	return nc, numDeletions
 }
@@ -467,7 +455,7 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 // Delete is used to delete a given key. Returns the old value if any,
 // and a bool indicating if the key was set.
 func (t *Txn) Delete(k []byte) (interface{}, bool) {
-	newRoot, leaf := t.delete(nil, t.root, k)
+	newRoot, leaf := t.delete(t.root, k)
 	if newRoot != nil {
 		t.root = newRoot
 	}
@@ -481,7 +469,7 @@ func (t *Txn) Delete(k []byte) (interface{}, bool) {
 // DeletePrefix is used to delete an entire subtree that matches the prefix
 // This will delete all nodes under that prefix
 func (t *Txn) DeletePrefix(prefix []byte) bool {
-	newRoot, numDeletions := t.deletePrefix(nil, t.root, prefix)
+	newRoot, numDeletions := t.deletePrefix(t.root, prefix)
 	if newRoot != nil {
 		t.root = newRoot
 		t.size = t.size - numDeletions
