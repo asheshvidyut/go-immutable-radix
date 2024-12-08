@@ -42,7 +42,6 @@ func BenchmarkDenseTreeMemoryInsert(b *testing.B) {
 	strs := generateDenseTestData(3)
 
 	b.ResetTimer()
-	b.ReportAllocs()
 
 	for _, str := range strs {
 		tr, _, _ = tr.Insert([]byte(str), nil)
@@ -59,7 +58,6 @@ func BenchmarkDenseTreeMemorySearch(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	b.ReportAllocs()
 
 	for _, str := range strs {
 		tr.Get([]byte(str))
