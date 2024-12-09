@@ -37,8 +37,8 @@ type Node struct {
 	// Edges should be stored in-order for iteration.
 	// We avoid a fully materialized slice to save memory,
 	// since in most cases we expect to be sparse
-	bitmap   [4]uint64
-	children []*Node
+	bitmap [4]uint64
+	edges  []*Node
 }
 
 func (n *Node) isLeaf() bool {
@@ -109,15 +109,15 @@ func (n *Node) findInsertionIndex(label byte) int {
 	}
 
 	// No existing child >= label, so insert at end
-	return len(n.children)
+	return len(n.edges)
 }
 
 func (n *Node) addEdge(label byte, child *Node) {
 	idx := n.findInsertionIndex(label)
-	n.children = append(n.children, child)
-	if idx != len(n.children)-1 {
-		copy(n.children[idx+1:], n.children[idx:len(n.children)-1])
-		n.children[idx] = child
+	n.edges = append(n.edges, child)
+	if idx != len(n.edges)-1 {
+		copy(n.edges[idx+1:], n.edges[idx:len(n.edges)-1])
+		n.edges[idx] = child
 	}
 	setBit(&n.bitmap, label)
 }
@@ -132,7 +132,7 @@ func (n *Node) getLowerBoundEdge(label byte) (int, *Node) {
 		offset := bits.TrailingZeros64(curBlock)
 		foundLabel := uint8(block*64 + bitPos + uint8(offset))
 		rank := n.rankOf(foundLabel)
-		return rank, n.children[rank]
+		return rank, n.edges[rank]
 	}
 
 	for b := block + 1; b < 4; b++ {
@@ -140,7 +140,7 @@ func (n *Node) getLowerBoundEdge(label byte) (int, *Node) {
 			offset := bits.TrailingZeros64(n.bitmap[b])
 			foundLabel := uint8(b*64 + uint8(offset))
 			rank := n.rankOf(foundLabel)
-			return rank, n.children[rank]
+			return rank, n.edges[rank]
 		}
 	}
 
@@ -168,7 +168,7 @@ func (n *Node) replaceEdge(label byte, child *Node) {
 
 	// Compute rank
 	rank := n.getChildRank(label)
-	n.children[rank] = child
+	n.edges[rank] = child
 }
 
 func (n *Node) getEdge(label byte) (int, *Node) {
@@ -176,7 +176,7 @@ func (n *Node) getEdge(label byte) (int, *Node) {
 		return -1, nil
 	}
 	rank := n.getChildRank(label)
-	return rank, n.children[rank]
+	return rank, n.edges[rank]
 }
 
 func (n *Node) delEdge(label byte) {
@@ -184,9 +184,9 @@ func (n *Node) delEdge(label byte) {
 		return
 	}
 	rank := n.getChildRank(label)
-	copy(n.children[rank:], n.children[rank+1:])
-	n.children[len(n.children)-1] = nil
-	n.children = n.children[:len(n.children)-1]
+	copy(n.edges[rank:], n.edges[rank+1:])
+	n.edges[len(n.edges)-1] = nil
+	n.edges = n.edges[:len(n.edges)-1]
 	clearBit(&n.bitmap, label)
 }
 
@@ -267,8 +267,8 @@ func (n *Node) Minimum() ([]byte, interface{}, bool) {
 		if n.isLeaf() {
 			return n.leaf.key, n.leaf.val, true
 		}
-		if len(n.children) > 0 {
-			n = n.children[0]
+		if len(n.edges) > 0 {
+			n = n.edges[0]
 		} else {
 			break
 		}
@@ -279,8 +279,8 @@ func (n *Node) Minimum() ([]byte, interface{}, bool) {
 // Maximum is used to return the maximum value in the tree
 func (n *Node) Maximum() ([]byte, interface{}, bool) {
 	for {
-		if num := len(n.children); num > 0 {
-			n = n.children[num-1]
+		if num := len(n.edges); num > 0 {
+			n = n.edges[num-1]
 			continue
 		}
 		if n.isLeaf() {
@@ -392,8 +392,8 @@ func recursiveWalk(n *Node, fn WalkFn) bool {
 		return true
 	}
 
-	// Iterate over children
-	for _, child := range n.children {
+	// Iterate over edges
+	for _, child := range n.edges {
 		if recursiveWalk(child, fn) {
 			return true
 		}
@@ -410,8 +410,8 @@ func reverseRecursiveWalk(n *Node, fn WalkFn) bool {
 		return true
 	}
 
-	for i := len(n.children) - 1; i >= 0; i-- {
-		if reverseRecursiveWalk(n.children[i], fn) {
+	for i := len(n.edges) - 1; i >= 0; i-- {
+		if reverseRecursiveWalk(n.edges[i], fn) {
 			return true
 		}
 	}

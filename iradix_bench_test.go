@@ -16,7 +16,7 @@ func generateKeysForDenseNode(prefix string) []string {
 }
 
 // generateDenseTestData generates an array of strings representing dense inputs.
-// Each node will have 256 children, and the depth of the tree is controlled by levels.
+// Each node will have 256 edges, and the depth of the tree is controlled by levels.
 func generateDenseTestData(levels int) []string {
 	var inputs []string
 	var prefixes []string
@@ -25,7 +25,7 @@ func generateDenseTestData(levels int) []string {
 	for level := 0; level < levels; level++ {
 		var newPrefixes []string
 		for _, prefix := range prefixes {
-			// Generate 256 children for each prefix
+			// Generate 256 edges for each prefix
 			keys := generateKeysForDenseNode(prefix)
 			inputs = append(inputs, keys...)           // Add all keys to the input list
 			newPrefixes = append(newPrefixes, keys...) // Use these keys as prefixes for the next level
