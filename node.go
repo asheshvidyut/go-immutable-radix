@@ -47,30 +47,30 @@ func (n *Node) isLeaf() bool {
 
 // setBit sets the bit for a given label
 func setBit(bitmap *[4]uint64, label byte) {
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 	bitmap[block] |= 1 << bitPos
 }
 
 // clearBit clears the bit for a given label
 func clearBit(bitmap *[4]uint64, label byte) {
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 	mask := uint64(1) << bitPos
 	bitmap[block] &^= mask
 }
 
 // bitSet checks if bit for label is set
 func bitSet(bitmap [4]uint64, label byte) bool {
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 	return (bitmap[block] & (1 << bitPos)) != 0
 }
 
 // rankOf computes how many bits are set before foundLabel
 func (n *Node) rankOf(foundLabel uint8) int {
-	block := foundLabel / 64
-	bitPos := foundLabel % 64
+	block := foundLabel >> 6
+	bitPos := foundLabel & 63
 	mask := uint64(1) << bitPos
 
 	rank := 0
@@ -84,8 +84,8 @@ func (n *Node) rankOf(foundLabel uint8) int {
 // findInsertionIndex finds the index where a label should be inserted.
 // Similar to lower bound search in a sorted array, but using a bitmap.
 func (n *Node) findInsertionIndex(label byte) int {
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 
 	// Check current block from bitPos upwards
 	curBlock := n.bitmap[block] >> bitPos
@@ -124,8 +124,8 @@ func (n *Node) addEdge(label byte, child *Node) {
 
 func (n *Node) getLowerBoundEdge(label byte) (int, *Node) {
 	// Similar logic to find the first child with label >= input
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 
 	curBlock := n.bitmap[block] >> bitPos
 	if curBlock != 0 {
@@ -149,8 +149,8 @@ func (n *Node) getLowerBoundEdge(label byte) (int, *Node) {
 }
 
 func (n *Node) getChildRank(label byte) int {
-	block := label / 64
-	bitPos := label % 64
+	block := label >> 6
+	bitPos := label & 63
 	mask := uint64(1) << bitPos
 
 	rank := 0
