@@ -1996,6 +1996,21 @@ func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 	}
 }
 
+func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
+	keys := make([][]byte, 0)
+	vals := make([]interface{}, 0)
+	for i := 0; i < 1000000; i++ {
+		key, _ := uuid.GenerateUUID()
+		keys = append(keys, []byte(key))
+		vals = append(vals, i)
+	}
+
+	b.ResetTimer()
+
+	r := New()
+	r, _ = r.BulkInsert(keys, vals)
+}
+
 func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
@@ -2016,21 +2031,6 @@ func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 			b.Fatalf("bad: %v", val)
 		}
 	}
-}
-
-func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
-	keys := make([][]byte, 0)
-	vals := make([]interface{}, 0)
-	for i := 0; i < 1000000; i++ {
-		key, _ := uuid.GenerateUUID()
-		keys = append(keys, []byte(key))
-		vals = append(vals, i)
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	r, _ = r.BulkInsert(keys, vals)
 }
 
 func BenchmarkBulkInsertLotsOfUUIDsAndSearch(b *testing.B) {
