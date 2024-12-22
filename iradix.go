@@ -2,6 +2,7 @@ package iradix
 
 import (
 	"bytes"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/golang-lru/simplelru"
@@ -246,6 +247,187 @@ func (t *Txn) mergeChild(n *Node) {
 }
 
 // insert does a recursive insertion
+func (t *Txn) bulkInsert(n *Node, keys map[int][]byte, searches map[int]int, vals map[int]interface{}) (*Node, map[int]*Node, map[int]interface{}, map[int]bool) {
+	// Handle key exhaustion
+	newNodes := make(map[int]*Node)
+	oldVals := make(map[int]interface{})
+	didUpdates := make(map[int]bool)
+	groups := make(map[byte]map[int]struct{})
+
+	sequence := make([]int, len(keys))
+	i := 0
+	for indx := range keys {
+		sequence[i] = indx
+		i += 1
+	}
+	sort.Slice(sequence, func(i, j int) bool {
+		return sequence[i] < sequence[j]
+	})
+
+	nc := t.writeNode(n, false)
+	for indx, val := range sequence {
+		// Look for the edge
+		search := searches[val]
+		if search == len(keys[val]) {
+			continue
+		}
+		indx = val
+		_, child := nc.getEdge(keys[indx][search:][0])
+		if child != nil {
+			if _, ok := groups[keys[indx][search:][0]]; !ok {
+				groups[keys[indx][search:][0]] = make(map[int]struct{})
+			}
+			groups[keys[indx][search:][0]][indx] = struct{}{}
+			continue
+		}
+		e := edge{
+			label: keys[indx][search:][0],
+			node: &Node{
+				mutateCh: make(chan struct{}),
+				leaf: &leafNode{
+					mutateCh: make(chan struct{}),
+					key:      keys[indx],
+					val:      vals[indx],
+				},
+				prefix: keys[indx][search:],
+			},
+		}
+		searches[indx] = len(keys[indx])
+		nc.addEdge(e)
+		newNodes[indx] = nc
+		oldVals[indx] = nil
+		didUpdates[indx] = false
+	}
+
+	for _, indices := range groups {
+		// First split the nodes and create all the new nodes
+		for _, indx := range sequence {
+			if _, ok := indices[indx]; !ok {
+				continue
+			}
+			_, child := nc.getEdge(keys[indx][searches[indx]:][0])
+			if child != nil {
+				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
+				if commonPrefix < len(child.prefix) {
+					// Split the node
+					splitNode := &Node{
+						mutateCh: make(chan struct{}),
+						prefix:   keys[indx][searches[indx] : searches[indx]+commonPrefix],
+					}
+					nc.replaceEdge(edge{
+						label: keys[indx][searches[indx]:][0],
+						node:  splitNode,
+					})
+
+					// Restore the existing child node
+					modChild := t.writeNode(child, false)
+					splitNode.addEdge(edge{
+						label: modChild.prefix[commonPrefix],
+						node:  modChild,
+					})
+					modChild.prefix = modChild.prefix[commonPrefix:]
+
+					// Create a new leaf node
+					leaf := &leafNode{
+						mutateCh: make(chan struct{}),
+						key:      keys[indx],
+						val:      vals[indx],
+					}
+
+					// If the new key is a subset, add to to this node
+					searches[indx] += commonPrefix
+					if searches[indx] == len(keys[indx]) {
+						splitNode.leaf = leaf
+						newNodes[indx] = nc
+						oldVals[indx] = nil
+						didUpdates[indx] = false
+						continue
+					}
+
+					// Create a new edge for the node
+					splitNode.addEdge(edge{
+						label: keys[indx][searches[indx]:][0],
+						node: &Node{
+							mutateCh: make(chan struct{}),
+							leaf:     leaf,
+							prefix:   keys[indx][searches[indx]:],
+						},
+					})
+					searches[indx] = len(keys[indx])
+					newNodes[indx] = nc
+					oldVals[indx] = nil
+					didUpdates[indx] = false
+				}
+			}
+		}
+	}
+
+	groups = make(map[byte]map[int]struct{})
+
+	for indx, val := range sequence {
+		if _, ok := keys[indx]; !ok {
+			continue
+		}
+		search := searches[val]
+		// Look for the edge
+		if search == len(keys[indx]) {
+			continue
+		}
+		indx = val
+		_, child := nc.getEdge(keys[indx][search:][0])
+		if child != nil {
+			if _, ok := groups[keys[indx][search:][0]]; !ok {
+				groups[keys[indx][search:][0]] = make(map[int]struct{})
+			}
+			groups[keys[indx][search:][0]][indx] = struct{}{}
+			continue
+		}
+	}
+
+	for label, indices := range groups {
+		subGroupsAllConsumed := make([]int, 0)
+		childIdx, child := nc.getEdge(label)
+		if child != nil {
+			for _, indx := range sequence {
+				if _, ok := indices[indx]; !ok {
+					continue
+				}
+				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
+				if commonPrefix == len(child.prefix) {
+					subGroupsAllConsumed = append(subGroupsAllConsumed, indx)
+				}
+			}
+			subKeys := make(map[int][]byte)
+			subVals := make(map[int]interface{})
+			subSearches := make(map[int]int)
+			for _, indx := range subGroupsAllConsumed {
+				subKeys[indx] = keys[indx]
+				subVals[indx] = vals[indx]
+				subSearches[indx] += len(child.prefix)
+			}
+			if len(subGroupsAllConsumed) > 0 {
+				// Insert the group members that have been fully consumed
+				newChild, newNodesSub, oldValsSub, didUpdatesSub := t.bulkInsert(child, subKeys, subSearches, subVals)
+				if newChild != nil {
+					nc.edges[childIdx].node = newChild
+				}
+				for indx, node := range newNodesSub {
+					newNodes[indx] = node
+				}
+				for indx, val := range oldValsSub {
+					oldVals[indx] = val
+				}
+				for indx, didUpdate := range didUpdatesSub {
+					didUpdates[indx] = didUpdate
+				}
+			}
+		}
+	}
+
+	return nc, newNodes, oldVals, didUpdates
+}
+
+// insert does a recursive insertion
 func (t *Txn) insert(n *Node, k, search []byte, v interface{}) (*Node, interface{}, bool) {
 	// Handle key exhaustion
 	if len(search) == 0 {
@@ -464,6 +646,67 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 	return oldVal, didUpdate
 }
 
+func sortKeysAndValues(keys [][]byte, values []interface{}) {
+	// Create a combined index map
+	indexMap := make([]int, len(keys))
+	for i := range indexMap {
+		indexMap[i] = i
+	}
+
+	// Sort based on custom logic: first by length, then lexicographically
+	sort.Slice(indexMap, func(i, j int) bool {
+		key1, key2 := keys[indexMap[i]], keys[indexMap[j]]
+		if len(key1) != len(key2) {
+			return len(key1) < len(key2) // Sort by length
+		}
+		return bytes.Compare(key1, key2) < 0 // Sort lexicographically if lengths are equal
+	})
+
+	// Reorder keys and values based on the sorted index map
+	sortedKeys := make([][]byte, len(keys))
+	sortedValues := make([]interface{}, len(values))
+	for i, idx := range indexMap {
+		sortedKeys[i] = keys[idx]
+		sortedValues[i] = values[idx]
+	}
+
+	// Copy sorted data back to original slices
+	copy(keys, sortedKeys)
+	copy(values, sortedValues)
+}
+
+func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) ([]interface{}, []bool) {
+	sortKeysAndValues(keys, vals)
+	indexKeysMap := make(map[int][]byte)
+	for i, key := range keys {
+		indexKeysMap[i] = key
+	}
+	indexSearchMap := make(map[int]int)
+	for i, _ := range keys {
+		indexSearchMap[i] = 0
+	}
+	valuesMap := make(map[int]interface{})
+	for i, val := range vals {
+		valuesMap[i] = val
+	}
+	newRoot, _, oldVal, didUpdate := t.bulkInsert(t.root, indexKeysMap, indexSearchMap, valuesMap)
+	oldVals := make([]interface{}, len(keys))
+	didUpdates := make([]bool, len(keys))
+	for i, val := range oldVal {
+		oldVals[i] = val
+	}
+	for i, update := range didUpdate {
+		didUpdates[i] = update
+		if !update {
+			t.size++
+		}
+	}
+	if newRoot != nil {
+		t.root = newRoot
+	}
+	return oldVals, didUpdates
+}
+
 // Delete is used to delete a given key. Returns the old value if any,
 // and a bool indicating if the key was set.
 func (t *Txn) Delete(k []byte) (interface{}, bool) {
@@ -620,6 +863,12 @@ func (t *Txn) Notify() {
 func (t *Tree) Insert(k []byte, v interface{}) (*Tree, interface{}, bool) {
 	txn := t.Txn()
 	old, ok := txn.Insert(k, v)
+	return txn.Commit(), old, ok
+}
+
+func (t *Tree) BulkInsert(keys [][]byte, vals []interface{}) (*Tree, []interface{}, []bool) {
+	txn := t.Txn()
+	old, ok := txn.BulkInsert(keys, vals)
 	return txn.Commit(), old, ok
 }
 

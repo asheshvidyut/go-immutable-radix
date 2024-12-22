@@ -1869,3 +1869,37 @@ func TestClone(t *testing.T) {
 		t.Fatalf("bad baz in t2")
 	}
 }
+
+func TestBulkInsert(t *testing.T) {
+	r := New()
+
+	keys := []string{
+		"foobar",
+		"foo/bar/baz",
+		"foo/baz/bar",
+		"foo/zip/zap",
+		"zipzap",
+	}
+
+	// Insert all the keys using bulkInsert method
+	// create array of values
+	values := make([]interface{}, len(keys))
+	for i, _ := range keys {
+		values[i] = i
+	}
+	// create keys of byte array [][]byte
+	byteKeys := make([][]byte, len(keys))
+	for i, k := range keys {
+		byteKeys[i] = []byte(k)
+	}
+	r, _, _ = r.BulkInsert(byteKeys, values)
+	if r.Len() != len(keys) {
+		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
+	}
+	for i, k := range keys {
+		if val, ok := r.Get([]byte(k)); !ok || val != i {
+			t.Fatalf("bad: %v", val)
+		}
+	}
+	fmt.Println("hello")
+}
