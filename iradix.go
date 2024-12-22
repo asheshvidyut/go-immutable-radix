@@ -365,6 +365,7 @@ func (t *Txn) bulkInsert(n *Node, keys map[int][]byte, searches map[int]int, val
 	groups = make(map[byte]map[int]struct{})
 
 	for indx, val := range sequence {
+		indx = val
 		if _, ok := keys[indx]; !ok {
 			continue
 		}
@@ -380,7 +381,6 @@ func (t *Txn) bulkInsert(n *Node, keys map[int][]byte, searches map[int]int, val
 				groups[keys[indx][search:][0]] = make(map[int]struct{})
 			}
 			groups[keys[indx][search:][0]][indx] = struct{}{}
-			continue
 		}
 	}
 
@@ -403,7 +403,7 @@ func (t *Txn) bulkInsert(n *Node, keys map[int][]byte, searches map[int]int, val
 			for _, indx := range subGroupsAllConsumed {
 				subKeys[indx] = keys[indx]
 				subVals[indx] = vals[indx]
-				subSearches[indx] += len(child.prefix)
+				subSearches[indx] = searches[indx] + len(child.prefix)
 			}
 			if len(subGroupsAllConsumed) > 0 {
 				// Insert the group members that have been fully consumed

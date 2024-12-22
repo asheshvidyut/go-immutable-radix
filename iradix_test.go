@@ -1,8 +1,10 @@
 package iradix
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -1902,4 +1904,47 @@ func TestBulkInsert(t *testing.T) {
 		}
 	}
 	fmt.Println("hello")
+}
+
+func TestBulkInsertLotsOfWords(t *testing.T) {
+	file, err := os.Open("words.txt")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a new scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// Read the file line by line
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+	}
+
+	keys := make([][]byte, 0)
+
+	for _, k := range lines {
+		keys = append(keys, []byte(k))
+	}
+
+	vals := make([]interface{}, len(keys))
+	for i, _ := range lines {
+		vals[i] = i
+	}
+
+	r := New()
+	r, _, _ = r.BulkInsert(keys, vals)
+
+	if r.Len() != len(lines) {
+		t.Fatalf("bad len: %v %v", r.Len(), len(lines))
+	}
+
+	for i, k := range lines {
+		if val, ok := r.Get([]byte(k)); !ok || val != i {
+			t.Fatalf("bad: %v %v", k, val)
+		}
+	}
 }
