@@ -1894,7 +1894,7 @@ func TestBulkInsert(t *testing.T) {
 	for i, k := range keys {
 		byteKeys[i] = []byte(k)
 	}
-	r, _, _ = r.BulkInsert(byteKeys, values)
+	r, _ = r.BulkInsert(byteKeys, values)
 	if r.Len() != len(keys) {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 	}
@@ -1906,7 +1906,39 @@ func TestBulkInsert(t *testing.T) {
 	fmt.Println("hello")
 }
 
-func TestBulkInsertLotsOfWords(t *testing.T) {
+func BenchmarkInsertLotOfWords(b *testing.B) {
+	file, err := os.Open("words.txt")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a new scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// Read the file line by line
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+	}
+
+	r := New()
+	b.ResetTimer()
+
+	for indx, line := range lines {
+		r, _, _ = r.Insert([]byte(line), indx)
+	}
+
+	for indx, line := range lines {
+		if val, ok := r.Get([]byte(line)); !ok || val != indx {
+			b.Fatalf("bad: %v", val)
+		}
+	}
+}
+
+func BenchmarkBulkInsertLotsOfWords(b *testing.B) {
 	file, err := os.Open("words.txt")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -1935,16 +1967,93 @@ func TestBulkInsertLotsOfWords(t *testing.T) {
 		vals[i] = i
 	}
 
-	r := New()
-	r, _, _ = r.BulkInsert(keys, vals)
+	b.ResetTimer()
 
-	if r.Len() != len(lines) {
-		t.Fatalf("bad len: %v %v", r.Len(), len(lines))
+	r := New()
+	r, _ = r.BulkInsert(keys, vals)
+
+	for indx, line := range lines {
+		if val, ok := r.Get([]byte(line)); !ok || val != indx {
+			b.Fatalf("bad: %v", val)
+		}
+	}
+}
+
+func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
+	keys := make([][]byte, 0)
+	vals := make([]interface{}, 0)
+	for i := 0; i < 1000000; i++ {
+		key, _ := uuid.GenerateUUID()
+		keys = append(keys, []byte(key))
+		vals = append(vals, i)
 	}
 
-	for i, k := range lines {
-		if val, ok := r.Get([]byte(k)); !ok || val != i {
-			t.Fatalf("bad: %v %v", k, val)
+	b.ResetTimer()
+
+	r := New()
+	for i := 0; i < 1000000; i++ {
+		r, _, _ = r.Insert(keys[i], vals[i])
+	}
+}
+
+func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
+	keys := make([][]byte, 0)
+	vals := make([]interface{}, 0)
+	for i := 0; i < 1000000; i++ {
+		key, _ := uuid.GenerateUUID()
+		keys = append(keys, []byte(key))
+		vals = append(vals, i)
+	}
+
+	b.ResetTimer()
+
+	r := New()
+	for i := 0; i < 1000000; i++ {
+		r, _, _ = r.Insert(keys[i], vals[i])
+	}
+	for i := 0; i < 1000000; i++ {
+		if val, ok := r.Get(keys[i]); !ok || val != i {
+			b.Fatalf("bad: %v", val)
+		}
+	}
+}
+
+func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
+	keys := make([][]byte, 0)
+	vals := make([]interface{}, 0)
+	for i := 0; i < 1000000; i++ {
+		key, _ := uuid.GenerateUUID()
+		keys = append(keys, []byte(key))
+		vals = append(vals, i)
+	}
+
+	b.ResetTimer()
+
+	r := New()
+	r, _ = r.BulkInsert(keys, vals)
+}
+
+func BenchmarkBulkInsertLotsOfUUIDsAndSearch(b *testing.B) {
+	keys := make([][]byte, 0)
+	vals := make([]interface{}, 0)
+	for i := 0; i < 1000000; i++ {
+		key, _ := uuid.GenerateUUID()
+		keys = append(keys, []byte(key))
+		vals = append(vals, i)
+	}
+
+	b.ResetTimer()
+
+	r := New()
+	r, _ = r.BulkInsert(keys, vals)
+
+	if r.Len() != 1000000 {
+		b.Fatalf("bad len: %v", r.Len())
+	}
+
+	for i := 0; i < 1000000; i++ {
+		if val, ok := r.Get(keys[i]); !ok || vals[i] != val {
+			b.Fatalf("bad: %v %v", string(keys[i]), val)
 		}
 	}
 }
