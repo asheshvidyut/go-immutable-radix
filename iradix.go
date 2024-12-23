@@ -651,7 +651,7 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 	copy(values, sortedValues)
 }
 
-func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) (numInserted int) {
+func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
 	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals)
