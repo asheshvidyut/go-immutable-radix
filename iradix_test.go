@@ -1906,6 +1906,93 @@ func TestBulkInsert(t *testing.T) {
 	fmt.Println("hello")
 }
 
+func TestMultipleBulkInsert(t *testing.T) {
+	r := New()
+
+	keys := []string{
+		"foobar",
+		"foo/bar/baz",
+		"foo/baz/bar",
+		"foo/zip/zap",
+		"zipzap",
+	}
+
+	// Insert all the keys using bulkInsert method
+	// create array of values
+	values := make([]interface{}, len(keys))
+	for i, _ := range keys {
+		values[i] = i
+	}
+	// create keys of byte array [][]byte
+	byteKeys := make([][]byte, len(keys))
+	for i, k := range keys {
+		byteKeys[i] = []byte(k)
+	}
+
+	r, _ = r.BulkInsert(byteKeys, values)
+	if r.Len() != len(keys) {
+		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
+	}
+
+	file, err := os.Open("words.txt")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a new scanner to read the file
+	scanner := bufio.NewScanner(file)
+
+	// Read the file line by line
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+	}
+
+	nkeys := make([][]byte, 0)
+
+	for _, k := range lines {
+		nkeys = append(nkeys, []byte(k))
+	}
+
+	vals := make([]interface{}, len(nkeys))
+	for i, _ := range lines {
+		vals[i] = i
+	}
+
+	allKeys := make(map[string]bool)
+
+	for _, k := range keys {
+		allKeys[k] = true
+	}
+
+	for _, k := range lines {
+		allKeys[k] = true
+	}
+
+	r, _ = r.BulkInsert(nkeys, vals)
+
+	if r.Len() != len(allKeys) {
+		t.Fatalf("bad len: %v %v", r.Len(), len(allKeys))
+	}
+
+	for i, k := range keys {
+		if val, ok := r.Get([]byte(k)); !ok || val != i {
+			t.Fatalf("bad: %v", val)
+		}
+	}
+	fmt.Println("hello")
+
+	for i, k := range nkeys {
+		if val, ok := r.Get(k); !ok || val != vals[i] {
+			t.Fatalf("bad: %v, %v", val, string(k))
+		}
+	}
+	fmt.Println("hello")
+}
+
 func BenchmarkInsertLotOfWords(b *testing.B) {
 	file, err := os.Open("words.txt")
 	if err != nil {
