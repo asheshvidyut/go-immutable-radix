@@ -381,9 +381,9 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 					subGroupsAllConsumed = append(subGroupsAllConsumed, indx)
 				}
 			}
-			subKeys := make([][]byte, 0)
-			subVals := make([]interface{}, 0)
-			subSearches := make([]int, 0)
+			subKeys := make([][]byte, 0, len(subGroupsAllConsumed))
+			subVals := make([]interface{}, 0, len(subGroupsAllConsumed))
+			subSearches := make([]int, 0, len(subGroupsAllConsumed))
 			for _, indx := range subGroupsAllConsumed {
 				subKeys = append(subKeys, keys[indx])
 				subVals = append(subVals, vals[indx])
