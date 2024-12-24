@@ -623,42 +623,42 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 }
 
 func sortKeysAndValues(keys [][]byte, values []interface{}) {
-	// Create a combined index map
-	indexMap := make([]int, len(keys))
-	for i := range indexMap {
-		indexMap[i] = i
+	// Create a combined structure for sorting
+	type keyValue struct {
+		key   []byte
+		value interface{}
 	}
 
-	// Sort based on custom logic: first by length, then lexicographically
-	sort.Slice(indexMap, func(i, j int) bool {
-		key1, key2 := keys[indexMap[i]], keys[indexMap[j]]
-		if len(key1) != len(key2) {
-			return len(key1) < len(key2) // Sort by length
+	keyValues := make([]keyValue, len(keys))
+
+	// Populate the combined structure
+	for i := 0; i < len(keys); i++ {
+		keyValues[i] = keyValue{
+			key:   keys[i],
+			value: values[i],
 		}
-		return bytes.Compare(key1, key2) < 0 // Sort lexicographically if lengths are equal
+	}
+
+	// Sort the combined structure
+	sort.Slice(keyValues, func(i, j int) bool {
+		// Compare based on length first, then lexicographically
+		if len(keyValues[i].key) != len(keyValues[j].key) {
+			return len(keyValues[i].key) < len(keyValues[j].key)
+		}
+		return bytes.Compare(keyValues[i].key, keyValues[j].key) < 0
 	})
 
-	// Reorder keys and values based on the sorted index map
-	sortedKeys := make([][]byte, len(keys))
-	sortedValues := make([]interface{}, len(values))
-	for i, idx := range indexMap {
-		sortedKeys[i] = keys[idx]
-		sortedValues[i] = values[idx]
+	// Extract sorted keys and values back into the original slices
+	for i, kv := range keyValues {
+		keys[i] = kv.key
+		values[i] = kv.value
 	}
-
-	// Copy sorted data back to original slices
-	copy(keys, sortedKeys)
-	copy(values, sortedValues)
 }
 
 func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
-	keysCopy := make([][]byte, len(keys))
-	valsCopy := make([]interface{}, len(vals))
-	copy(keysCopy, keys)
-	copy(valsCopy, vals)
-	sortKeysAndValues(keysCopy, valsCopy)
+	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
-	newRoot, newNodesCount := t.bulkInsert(t.root, keysCopy, search, valsCopy)
+	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals)
 	if newRoot != nil {
 		t.root = newRoot
 	}
