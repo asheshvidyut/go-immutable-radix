@@ -1903,6 +1903,15 @@ func TestBulkInsert(t *testing.T) {
 			t.Fatalf("bad: %v", val)
 		}
 	}
+	for idx, _ := range values {
+		values[idx] = idx * 10
+	}
+	r, _ = r.BulkInsert(byteKeys, values)
+	for i, _ := range byteKeys {
+		if val, ok := r.Get([]byte(keys[i])); !ok || val != values[i] {
+			t.Fatalf("bad: %v %v %v", val, values[i], string(keys[i]))
+		}
+	}
 	fmt.Println("hello")
 }
 
@@ -2072,7 +2081,7 @@ func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 	for i := 0; i < 1000000; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
-		vals = append(vals, i)
+		vals = append(vals, testObjWithId(i))
 	}
 
 	b.ResetTimer()
@@ -2089,7 +2098,7 @@ func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
 	for i := 0; i < 1000000; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
-		vals = append(vals, i)
+		vals = append(vals, testObjWithId(i))
 	}
 
 	b.ResetTimer()
@@ -2098,13 +2107,74 @@ func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
 	r, _ = r.BulkInsert(keys, vals)
 }
 
+type TestObject struct {
+	ID       string
+	Foo      string
+	Fu       *string
+	Boo      *string
+	Bar      int
+	Baz      string
+	Bam      *bool
+	Empty    string
+	Qux      []string
+	QuxEmpty []string
+	Zod      map[string]string
+	ZodEmpty map[string]string
+	Int      int
+	Int8     int8
+	Int16    int16
+	Int32    int32
+	Int64    int64
+	Uint     uint
+	Uint8    uint8
+	Uint16   uint16
+	Uint32   uint32
+	Uint64   uint64
+	Bool     bool
+}
+
+func String(s string) *string {
+	return &s
+}
+
+func testObjWithId(id int) *TestObject {
+	b := true
+	obj := &TestObject{
+		ID:  fmt.Sprintf("my-cool-obj-%d", id),
+		Foo: "Testing",
+		Fu:  String("Fu"),
+		Boo: nil,
+		Bar: 42,
+		Baz: "yep",
+		Bam: &b,
+		Qux: []string{"Test", "Test2"},
+		Zod: map[string]string{
+			"Role":          "Server",
+			"instance_type": "m3.medium",
+			"":              "asdf",
+		},
+		Int:    int(1),
+		Int8:   int8(-1 << 7),
+		Int16:  int16(-1 << 15),
+		Int32:  int32(-1 << 31),
+		Int64:  int64(-1 << 63),
+		Uint:   uint(1),
+		Uint8:  uint8(1<<8 - 1),
+		Uint16: uint16(1<<16 - 1),
+		Uint32: uint32(1<<32 - 1),
+		Uint64: uint64(1<<64 - 1),
+		Bool:   false,
+	}
+	return obj
+}
+
 func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < 1000000; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
-		vals = append(vals, i)
+		vals = append(vals, testObjWithId(i))
 	}
 
 	b.ResetTimer()
