@@ -2089,7 +2089,7 @@ func BenchmarkBulkInsertLotOfWords(b *testing.B) {
 	}
 }
 
-func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
+func BenchmarkInsertLotOfUUIDs(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
@@ -2106,7 +2106,7 @@ func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
+func BenchmarkBulkInsertLotOfUUIDs(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
@@ -2182,7 +2182,7 @@ func testObjWithId(id int) *TestObject {
 	return obj
 }
 
-func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
+func BenchmarkInsertLotOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
@@ -2204,7 +2204,7 @@ func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotsOfUUIDsAndSearch(b *testing.B) {
+func BenchmarkBulkInsertLotOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
