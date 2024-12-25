@@ -1894,6 +1894,10 @@ func TestBulkInsert(t *testing.T) {
 	for i, k := range keys {
 		byteKeys[i] = []byte(k)
 	}
+	keyVals := make(map[string]interface{})
+	for i, k := range keys {
+		keyVals[k] = values[i]
+	}
 	r, _ = r.BulkInsert(byteKeys, values)
 	if r.Len() != len(keys) {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -1903,12 +1907,22 @@ func TestBulkInsert(t *testing.T) {
 			t.Fatalf("bad: %v", val)
 		}
 	}
-	for idx, _ := range values {
-		values[idx] = idx * 10
+	for k, v := range keyVals {
+		keyVals[k] = v.(int) * 10
+	}
+	keys = make([]string, 0)
+	values = make([]interface{}, 0)
+	for k, v := range keyVals {
+		keys = append(keys, k)
+		values = append(values, v)
+	}
+	byteKeys = make([][]byte, len(keys))
+	for i, k := range keys {
+		byteKeys[i] = []byte(k)
 	}
 	r, _ = r.BulkInsert(byteKeys, values)
 	for i, _ := range byteKeys {
-		if val, ok := r.Get([]byte(keys[i])); !ok || val != values[i] {
+		if val, ok := r.Get([]byte(keys[i])); !ok || val != keyVals[keys[i]] {
 			t.Fatalf("bad: %v %v %v", val, values[i], string(keys[i]))
 		}
 	}
