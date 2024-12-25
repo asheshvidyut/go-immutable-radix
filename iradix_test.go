@@ -2092,7 +2092,7 @@ func BenchmarkBulkInsertLotsOfWords(b *testing.B) {
 func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
 		vals = append(vals, testObjWithId(i))
@@ -2101,7 +2101,7 @@ func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 	b.ResetTimer()
 
 	r := New()
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		r, _, _ = r.Insert(keys[i], vals[i])
 	}
 }
@@ -2109,7 +2109,7 @@ func BenchmarkInsertLotsOfUUIDs(b *testing.B) {
 func BenchmarkBulkInsertLotsOfUUIDs(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
 		vals = append(vals, testObjWithId(i))
@@ -2185,7 +2185,7 @@ func testObjWithId(id int) *TestObject {
 func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
 		vals = append(vals, testObjWithId(i))
@@ -2194,11 +2194,11 @@ func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	b.ResetTimer()
 
 	r := New()
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		r, _, _ = r.Insert(keys[i], vals[i])
 	}
-	for i := 0; i < 1000000; i++ {
-		if val, ok := r.Get(keys[i]); !ok || val != i {
+	for i := 0; i < b.N; i++ {
+		if val, ok := r.Get(keys[i]); !ok || val != vals[i] {
 			b.Fatalf("bad: %v", val)
 		}
 	}
@@ -2207,7 +2207,7 @@ func BenchmarkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 func BenchmarkBulkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		key, _ := uuid.GenerateUUID()
 		keys = append(keys, []byte(key))
 		vals = append(vals, i)
@@ -2218,11 +2218,11 @@ func BenchmarkBulkInsertLotsOfUUIDsAndSearch(b *testing.B) {
 	r := New()
 	r, _ = r.BulkInsert(keys, vals)
 
-	if r.Len() != 1000000 {
+	if r.Len() != b.N {
 		b.Fatalf("bad len: %v", r.Len())
 	}
 
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < b.N; i++ {
 		if val, ok := r.Get(keys[i]); !ok || vals[i] != val {
 			b.Fatalf("bad: %v %v", string(keys[i]), val)
 		}
