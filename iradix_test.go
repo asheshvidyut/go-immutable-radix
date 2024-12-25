@@ -2048,7 +2048,7 @@ func BenchmarkInsertLotOfWords(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotsOfWords(b *testing.B) {
+func BenchmarkBulkInsertLotOfWords(b *testing.B) {
 	file, err := os.Open("words.txt")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
