@@ -1000,9 +1000,11 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 			"foobar",
 			"zipzap",
 		}
+		byteKeys := make([][]byte, 0)
 		for _, k := range keys {
-			r, _, _ = r.Insert([]byte(k), nil)
+			byteKeys = append(byteKeys, []byte(k))
 		}
+		r, _ = r.BulkInsert(byteKeys, []interface{}{nil, nil, nil, nil, nil})
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 		}
@@ -1033,7 +1035,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a sub-child should not trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([]byte("foobarbaz"), nil)
+		txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1084,7 +1086,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a exactly leaf should trigger the leaf!
 		txn = r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([]byte("foobar"), nil)
+		txn.BulkInsert([][]byte{[]byte("foobar")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()

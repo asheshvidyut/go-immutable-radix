@@ -259,6 +259,7 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 			if nc.isLeaf() {
 				didUpdate = true
 			}
+			nc = t.writeNode(nc, true)
 			nc.leaf = &leafNode{
 				mutateCh: make(chan struct{}),
 				key:      keys[indx],
