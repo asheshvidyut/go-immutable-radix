@@ -248,31 +248,27 @@ func (t *Txn) mergeChild(n *Node) {
 
 // insert does a recursive insertion
 func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interface{}) (*Node, int) {
-	// Handle key exhaustion
 	newNodesCount := 0
 	groups := make(map[byte][]int)
 
 	nc := t.writeNode(n, false)
 	for indx, _ := range keys {
-		// Look for the edge
-		val := indx
-		search := searches[val]
-		if search == len(keys[val]) {
+		search := searches[indx]
+		if search == len(keys[indx]) {
 			didUpdate := false
 			if nc.isLeaf() {
 				didUpdate = true
 			}
 			nc.leaf = &leafNode{
 				mutateCh: make(chan struct{}),
-				key:      keys[val],
-				val:      vals[val],
+				key:      keys[indx],
+				val:      vals[indx],
 			}
 			if !didUpdate {
 				newNodesCount++
 			}
 			continue
 		}
-		indx = val
 		_, child := nc.getEdge(keys[indx][search:][0])
 		if child != nil {
 			if _, ok := groups[keys[indx][search:][0]]; !ok {
@@ -656,6 +652,7 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 }
 
 func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
+	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
 	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals)
