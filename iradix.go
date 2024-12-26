@@ -623,6 +623,7 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 	type keyValue struct {
 		key   []byte
 		value interface{}
+		index int // Preserve original index
 	}
 
 	keyValues := make([]keyValue, len(keys))
@@ -632,6 +633,7 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 		keyValues[i] = keyValue{
 			key:   keys[i],
 			value: values[i],
+			index: i,
 		}
 	}
 
@@ -641,14 +643,18 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 		if len(keyValues[i].key) != len(keyValues[j].key) {
 			return len(keyValues[i].key) < len(keyValues[j].key)
 		}
-		return bytes.Compare(keyValues[i].key, keyValues[j].key) < 0
+		if cmp := bytes.Compare(keyValues[i].key, keyValues[j].key); cmp != 0 {
+			return cmp < 0
+		}
+		// Use the original index as a tie-breaker to ensure stability
+		return keyValues[i].index > keyValues[j].index // Higher index means later in input
 	})
 
 	// Create new slices for unique keys and values
 	uniqueKeys := make([][]byte, 0, len(keys))
 	uniqueValues := make([]interface{}, 0, len(values))
 
-	// Iterate through sorted keyValues and skip duplicates
+	// Iterate through sorted keyValues and keep the last occurrence of each key
 	for i := 0; i < len(keyValues); i++ {
 		// If it's the last key or different from the next key, keep it
 		if i == len(keyValues)-1 || !bytes.Equal(keyValues[i].key, keyValues[i+1].key) {
