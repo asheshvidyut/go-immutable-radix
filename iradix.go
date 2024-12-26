@@ -644,11 +644,26 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 		return bytes.Compare(keyValues[i].key, keyValues[j].key) < 0
 	})
 
-	// Extract sorted keys and values back into the original slices
-	for i, kv := range keyValues {
-		keys[i] = kv.key
-		values[i] = kv.value
+	// Create new slices for unique keys and values
+	uniqueKeys := make([][]byte, 0, len(keys))
+	uniqueValues := make([]interface{}, 0, len(values))
+
+	// Iterate through sorted keyValues and skip duplicates
+	for i := 0; i < len(keyValues); i++ {
+		// If it's the last key or different from the next key, keep it
+		if i == len(keyValues)-1 || !bytes.Equal(keyValues[i].key, keyValues[i+1].key) {
+			uniqueKeys = append(uniqueKeys, keyValues[i].key)
+			uniqueValues = append(uniqueValues, keyValues[i].value)
+		}
 	}
+
+	// Replace original slices with unique ones
+	copy(keys, uniqueKeys)
+	copy(values, uniqueValues)
+
+	// Adjust slices to the new size
+	keys = keys[:len(uniqueKeys)]
+	values = values[:len(uniqueValues)]
 }
 
 func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
