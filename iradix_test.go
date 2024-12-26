@@ -864,7 +864,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 			"zipzap",
 		}
 		for _, k := range keys {
-			r, _, _ = r.Insert([]byte(k), nil)
+			r, _ = r.BulkInsert([][]byte{[]byte(k)}, []interface{}{nil})
 		}
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -888,7 +888,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 		// Write to a sub-child should trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([]byte("foobarbaz"), nil)
+		txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1245,14 +1245,14 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("aaa%d", i)
-		r, _, _ = r.Insert([]byte(key), nil)
+		r, _ = r.BulkInsert([][]byte{[]byte(key)}, []interface{}{nil})
 	}
 	for _, k := range keys {
-		r, _, _ = r.Insert([]byte(k), nil)
+		r, _ = r.BulkInsert([][]byte{[]byte(k)}, []interface{}{nil})
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("zzz%d", i)
-		r, _, _ = r.Insert([]byte(key), nil)
+		r, _ = r.BulkInsert([][]byte{[]byte(key)}, []interface{}{nil})
 	}
 	if r.Len() != len(keys)+2*defaultModifiedCache {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -1309,12 +1309,12 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 		key := fmt.Sprintf("zzz%d", i)
 		txn.Delete([]byte(key))
 	}
-	txn.Insert([]byte("zzz"), nil)
+	r, _ = r.BulkInsert([][]byte{[]byte("zzz")}, []interface{}{nil})
 
 	// Hit the leaf, and add a child so we make multiple mutations to the
 	// same node.
-	txn.Insert([]byte("foobar"), nil)
-	txn.Insert([]byte("foobarbaz"), nil)
+	txn.BulkInsert([][]byte{[]byte("foobar")}, []interface{}{nil})
+	txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 
 	// Commit and make sure we overflowed but didn't take on extra stuff.
 	r = txn.CommitOnly()
