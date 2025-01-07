@@ -11,17 +11,14 @@ func benchInsertTxn(b *testing.B, batchSize int, track bool) {
 
 	b.ResetTimer()
 
-	keys := make([][]byte, batchSize)
-	for i := 0; i < batchSize; i++ {
-		keys[i] = []byte(uuid.New().String())
-	}
 	for i := 0; i < b.N; i++ {
 		txn := r.Txn()
 
 		txn.TrackMutate(track)
 
 		for j := 0; j < batchSize; j++ {
-			txn.Insert(keys[j], j)
+			key := []byte(uuid.New().String())
+			txn.Insert(key, j)
 		}
 
 		r = txn.Commit()
