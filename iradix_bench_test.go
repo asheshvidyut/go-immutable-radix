@@ -59,3 +59,10 @@ func Benchmark100000InsertTxnTrack(b *testing.B) {
 func Benchmark100000InsertTxnNoTrack(b *testing.B) {
 	benchInsertTxn(b, 100000, false)
 }
+
+func Benchmark1000000BulkInsertTxnTrack(b *testing.B) {
+	benchInsertTxn(b, 1000000, true)
+}
+func Benchmark1000000BulkInsertTxnNoTrack(b *testing.B) {
+	benchInsertTxn(b, 1000000, false)
+}
