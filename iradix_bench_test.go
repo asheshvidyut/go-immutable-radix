@@ -1,6 +1,7 @@
 package iradix
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/google/uuid"
@@ -23,6 +24,11 @@ func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 	for i := 0; i < b.N; i++ {
 		txn := r.Txn()
 		txn.TrackMutate(track)
+
+		for i := range keys {
+			j := rand.Intn(i + 1)
+			keys[i], keys[j] = keys[j], keys[i]
+		}
 
 		txn.BulkInsert(keys, values)
 
