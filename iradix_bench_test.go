@@ -30,21 +30,24 @@ func benchInsertTxn(b *testing.B, batchSize int, track bool) {
 	}
 }
 
-func Benchmark10InsertTxnTrack(b *testing.B) {
-	benchInsertTxn(b, 1000, true)
-}
-func Benchmark10InsertTxnNoTrack(b *testing.B) {
-	benchInsertTxn(b, 1000, false)
-}
-func Benchmark100InsertTxnTrack(b *testing.B) {
+//	func Benchmark10InsertTxnTrack(b *testing.B) {
+//		benchInsertTxn(b, 10, true)
+//	}
+//
+//	func Benchmark10InsertTxnNoTrack(b *testing.B) {
+//		benchInsertTxn(b, 10, false)
+//	}
+//
+//	func Benchmark100InsertTxnTrack(b *testing.B) {
+//		benchInsertTxn(b, 100, true)
+//	}
+//
+//	func Benchmark100InsertTxnNoTrack(b *testing.B) {
+//		benchInsertTxn(b, 100, false)
+//	}
+func Benchmark1000InsertTxnTrack(b *testing.B) {
 	benchInsertTxn(b, 10000, true)
 }
-func Benchmark100InsertTxnNoTrack(b *testing.B) {
-	benchInsertTxn(b, 10000, false)
-}
-func Benchmark1000InsertTxnTrack(b *testing.B) {
-	benchInsertTxn(b, 1000000, true)
-}
 func Benchmark1000InsertTxnNoTrack(b *testing.B) {
-	benchInsertTxn(b, 1000000, false)
+	benchInsertTxn(b, 10000, false)
 }
