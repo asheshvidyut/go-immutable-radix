@@ -351,23 +351,6 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 		}
 	}
 
-	groups = make(map[byte][]int)
-
-	for indx, _ := range keys {
-		search := searches[indx]
-		// Look for the edge
-		if search == len(keys[indx]) {
-			continue
-		}
-		_, child := nc.getEdge(keys[indx][search:][0])
-		if child != nil {
-			if _, ok := groups[keys[indx][search:][0]]; !ok {
-				groups[keys[indx][search:][0]] = make([]int, 0)
-			}
-			groups[keys[indx][search:][0]] = append(groups[keys[indx][search:][0]], indx)
-		}
-	}
-
 	for label, indices := range groups {
 		subGroupsAllConsumed := make([]int, 0)
 		childIdx, child := nc.getEdge(label)
