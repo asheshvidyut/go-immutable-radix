@@ -1,7 +1,6 @@
 package iradix
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/google/uuid"
@@ -13,21 +12,16 @@ func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 	keys := make([][]byte, batchSize)
 	values := make([]interface{}, batchSize)
 
-	// Pre-generate UUIDs to avoid runtime overhead
-	for i := 0; i < batchSize; i++ {
-		keys[i] = []byte(uuid.New().String())
-		values[i] = i
-	}
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		txn := r.Txn()
 		txn.TrackMutate(track)
 
-		for i := range keys {
-			j := rand.Intn(i + 1)
-			keys[i], keys[j] = keys[j], keys[i]
+		// Pre-generate UUIDs to avoid runtime overhead
+		for j := 0; j < batchSize; j++ {
+			keys[j] = []byte(uuid.New().String())
+			values[j] = j
 		}
 
 		txn.BulkInsert(keys, values)
