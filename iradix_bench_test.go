@@ -11,17 +11,18 @@ func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 
 	b.ResetTimer()
 
+	keys := make([][]byte, batchSize)
+	values := make([]interface{}, batchSize)
+	for j := 0; j < batchSize; j++ {
+		keys[j] = []byte(uuid.New().String())
+		values[j] = j
+	}
+
 	for i := 0; i < b.N; i++ {
 		txn := r.Txn()
 
 		txn.TrackMutate(track)
 
-		keys := make([][]byte, batchSize)
-		values := make([]interface{}, batchSize)
-		for j := 0; j < batchSize; j++ {
-			keys[j] = []byte(uuid.New().String())
-			values[j] = j
-		}
 		txn.BulkInsert(keys, values)
 
 		r = txn.Commit()
