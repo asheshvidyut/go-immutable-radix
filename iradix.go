@@ -247,12 +247,13 @@ func (t *Txn) mergeChild(n *Node) {
 }
 
 // insert does a recursive insertion
-func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interface{}) (*Node, int) {
+func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
 	newNodesCount := 0
 	groups := make(map[byte][]int)
 
 	nc := t.writeNode(n, false)
-	for indx, _ := range keys {
+	for idx, _ := range evalIndex {
+		indx := evalIndex[idx]
 		search := searches[indx]
 		if search == len(keys[indx]) {
 			didUpdate := false
@@ -297,9 +298,8 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 
 	for label, indices := range groups {
 		// First split the nodes and create all the new nodes
-		childIndx, child := nc.getEdge(label)
 		for _, indx := range indices {
-			child = nc.edges[childIndx].node
+			_, child := nc.getEdge(label)
 			if child != nil {
 				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
 				if commonPrefix < len(child.prefix) {
@@ -350,32 +350,20 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 				}
 			}
 		}
-	}
-
-	for label, indices := range groups {
-		subGroupsAllConsumed := make([]int, 0)
-		childIdx, child := nc.getEdge(label)
-		if child != nil {
-			for _, indx := range indices {
-				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
-				if commonPrefix == len(child.prefix) {
-					subGroupsAllConsumed = append(subGroupsAllConsumed, indx)
-				}
+		for _, indx := range indices {
+			childIndx, child := nc.getEdge(label)
+			newEvalIndex := make([]int, 0)
+			commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
+			if commonPrefix == len(child.prefix) {
+				newEvalIndex = append(newEvalIndex, indx)
 			}
-			subKeys := make([][]byte, 0, len(subGroupsAllConsumed))
-			subVals := make([]interface{}, 0, len(subGroupsAllConsumed))
-			subSearches := make([]int, 0, len(subGroupsAllConsumed))
-			for _, indx := range subGroupsAllConsumed {
-				subKeys = append(subKeys, keys[indx])
-				subVals = append(subVals, vals[indx])
-				subSearches = append(subSearches, searches[indx]+len(child.prefix))
-			}
-			if len(subGroupsAllConsumed) > 0 {
+			searches[indx] += len(child.prefix)
+			if len(newEvalIndex) > 0 {
 				// Insert the group members that have been fully consumed
-				newChild, subUpdateCount := t.bulkInsert(child, subKeys, subSearches, subVals)
+				newChild, subUpdateCount := t.bulkInsert(child, keys, searches, vals, newEvalIndex)
 				newNodesCount += subUpdateCount
 				if newChild != nil {
-					nc.edges[childIdx].node = newChild
+					nc.edges[childIndx].node = newChild
 				}
 			}
 		}
@@ -661,7 +649,11 @@ func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
 	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
-	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals)
+	evalIndex := make([]int, 0)
+	for i := 0; i < len(keys); i++ {
+		evalIndex = append(evalIndex, i)
+	}
+	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals, evalIndex)
 	if newRoot != nil {
 		t.root = newRoot
 	}
