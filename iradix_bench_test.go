@@ -9,25 +9,26 @@ import (
 func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 	r := New()
 
-	keys := make([][]byte, batchSize)
-	values := make([]interface{}, batchSize)
+	keys := make([][]byte, b.N*batchSize)
+	values := make([]interface{}, b.N*batchSize)
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		txn := r.Txn()
-		txn.TrackMutate(track)
+	txn := r.Txn()
+	txn.TrackMutate(track)
 
+	index := 0
+	for i := 0; i < b.N; i++ {
 		// Pre-generate UUIDs to avoid runtime overhead
 		for j := 0; j < batchSize; j++ {
-			keys[j] = []byte(uuid.New().String())
-			values[j] = j
+			keys[index] = []byte(uuid.New().String())
+			values[index] = j
+			index++
 		}
-
-		txn.BulkInsert(keys, values)
-
-		r = txn.Commit()
 	}
+	txn.BulkInsert(keys, values)
+
+	r = txn.Commit()
 }
 
 func Benchmark10BulkInsertTxnTrack(b *testing.B) {
