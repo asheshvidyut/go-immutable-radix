@@ -295,10 +295,11 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 		nc.addEdge(e)
 	}
 
-	for _, indices := range groups {
+	for label, indices := range groups {
 		// First split the nodes and create all the new nodes
+		childIndx, child := nc.getEdge(label)
 		for _, indx := range indices {
-			_, child := nc.getEdge(keys[indx][searches[indx]:][0])
+			child = nc.edges[childIndx].node
 			if child != nil {
 				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
 				if commonPrefix < len(child.prefix) {
