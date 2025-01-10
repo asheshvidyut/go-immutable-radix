@@ -19,16 +19,12 @@ func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		txn := r.Txn()
-		txn.TrackMutate(track)
+	txn := r.Txn()
+	txn.TrackMutate(track)
 
-		// Insert keys and values for this batch
-		start := i * batchSize
-		txn.BulkInsert(keys[start:start+batchSize], values[start:start+batchSize])
+	txn.BulkInsert(keys, values)
 
-		r = txn.Commit()
-	}
+	r = txn.Commit()
 }
 
 func Benchmark10BulkInsertTxnTrack(b *testing.B) {
