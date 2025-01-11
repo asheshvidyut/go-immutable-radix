@@ -645,6 +645,9 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 }
 
 func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
+	if t.size > 0 {
+		panic("InitializeWithData only works for empty tree")
+	}
 	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
