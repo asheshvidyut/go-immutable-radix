@@ -820,6 +820,9 @@ func (t *Tree) Insert(k []byte, v interface{}) (*Tree, interface{}, bool) {
 }
 
 func (t *Tree) InitializeWithData(keys [][]byte, vals []interface{}) (*Tree, int) {
+	if t.size > 0 {
+		panic("InitializeWithData can only be called on an empty tree")
+	}
 	txn := t.Txn()
 	newNodesAdded := txn.InitializeWithData(keys, vals)
 	return txn.Commit(), newNodesAdded
