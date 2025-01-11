@@ -21,7 +21,7 @@ func benchBulkInsertTxn(b *testing.B, batchSize int, track bool) {
 	for i := 0; i < b.N; i++ {
 		start := i * batchSize
 		txn := r.Txn()
-		txn.BulkInsert(keys[start:start+batchSize], values[start:start+batchSize])
+		txn.InitializeWithData(keys[start:start+batchSize], values[start:start+batchSize])
 		r = txn.Commit()
 	}
 

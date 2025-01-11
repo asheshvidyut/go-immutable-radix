@@ -313,7 +313,7 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 					})
 
 					// Restore the existing child node
-					modChild := t.writeNode(child, false)
+					modChild := child
 					splitNode.addEdge(edge{
 						label: modChild.prefix[commonPrefix],
 						node:  modChild,
