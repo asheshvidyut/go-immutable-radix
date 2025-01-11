@@ -247,11 +247,10 @@ func (t *Txn) mergeChild(n *Node) {
 }
 
 // insert does a recursive insertion
-func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
+func (t *Txn) bulkInsert(nc *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
 	newNodesCount := 0
 	groups := make(map[byte][]int)
 
-	nc := t.writeNode(n, false)
 	for idx, _ := range evalIndex {
 		indx := evalIndex[idx]
 		search := searches[indx]
@@ -260,7 +259,6 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 			if nc.isLeaf() {
 				didUpdate = true
 			}
-			nc = t.writeNode(nc, true)
 			nc.leaf = &leafNode{
 				mutateCh: make(chan struct{}),
 				key:      keys[indx],
@@ -271,16 +269,17 @@ func (t *Txn) bulkInsert(n *Node, keys [][]byte, searches []int, vals []interfac
 			}
 			continue
 		}
-		_, child := nc.getEdge(keys[indx][search:][0])
+		label := keys[indx][search:][0]
+		_, child := nc.getEdge(label)
 		if child != nil {
-			if _, ok := groups[keys[indx][search:][0]]; !ok {
-				groups[keys[indx][search:][0]] = make([]int, 0)
+			if _, ok := groups[label]; !ok {
+				groups[label] = make([]int, 0)
 			}
-			groups[keys[indx][search:][0]] = append(groups[keys[indx][search:][0]], indx)
+			groups[label] = append(groups[label], indx)
 			continue
 		}
 		e := edge{
-			label: keys[indx][search:][0],
+			label: label,
 			node: &Node{
 				mutateCh: make(chan struct{}),
 				leaf: &leafNode{

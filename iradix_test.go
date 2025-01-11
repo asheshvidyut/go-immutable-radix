@@ -864,7 +864,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 			"zipzap",
 		}
 		for _, k := range keys {
-			r, _ = r.BulkInsert([][]byte{[]byte(k)}, []interface{}{nil})
+			r, _ = r.Insert([]byte(k), ni})
 		}
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -888,7 +888,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 		// Write to a sub-child should trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+		txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1004,7 +1004,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		for _, k := range keys {
 			byteKeys = append(byteKeys, []byte(k))
 		}
-		r, _ = r.BulkInsert(byteKeys, []interface{}{nil, nil, nil, nil, nil})
+		r, _ = r.Insert(byteKeys, []interface{}{nil, nil, nil, nil, nil})
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 		}
@@ -1035,7 +1035,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a sub-child should not trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+		txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1086,7 +1086,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a exactly leaf should trigger the leaf!
 		txn = r.Txn()
 		txn.TrackMutate(true)
-		txn.BulkInsert([][]byte{[]byte("foobar")}, []interface{}{nil})
+		txn.Insert([][]byte{[]byte("foobar")}, []interface{}{nil})
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1245,14 +1245,14 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("aaa%d", i)
-		r, _ = r.BulkInsert([][]byte{[]byte(key)}, []interface{}{nil})
+		r, _ = r.Insert([][]byte{[]byte(key)}, []interface{}{nil})
 	}
 	for _, k := range keys {
-		r, _ = r.BulkInsert([][]byte{[]byte(k)}, []interface{}{nil})
+		r, _ = r.Insert([][]byte{[]byte(k)}, []interface{}{nil})
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("zzz%d", i)
-		r, _ = r.BulkInsert([][]byte{[]byte(key)}, []interface{}{nil})
+		r, _ = r.Insert([][]byte{[]byte(key)}, []interface{}{nil})
 	}
 	if r.Len() != len(keys)+2*defaultModifiedCache {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -1309,12 +1309,12 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 		key := fmt.Sprintf("zzz%d", i)
 		txn.Delete([]byte(key))
 	}
-	r, _ = r.BulkInsert([][]byte{[]byte("zzz")}, []interface{}{nil})
+	r, _ = r.Insert([][]byte{[]byte("zzz")}, []interface{}{nil})
 
 	// Hit the leaf, and add a child so we make multiple mutations to the
 	// same node.
-	txn.BulkInsert([][]byte{[]byte("foobar")}, []interface{}{nil})
-	txn.BulkInsert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+	txn.Insert([][]byte{[]byte("foobar")}, []interface{}{nil})
+	txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
 
 	// Commit and make sure we overflowed but didn't take on extra stuff.
 	r = txn.CommitOnly()
@@ -1874,7 +1874,7 @@ func TestClone(t *testing.T) {
 	}
 }
 
-func TestBulkInsert(t *testing.T) {
+func TestInsert(t *testing.T) {
 	r := New()
 
 	keys := []string{
@@ -1885,7 +1885,7 @@ func TestBulkInsert(t *testing.T) {
 		"zipzap",
 	}
 
-	// Insert all the keys using bulkInsert method
+	// Insert all the keys using Insert method
 	// create array of values
 	values := make([]interface{}, len(keys))
 	for i, _ := range keys {
@@ -1900,7 +1900,7 @@ func TestBulkInsert(t *testing.T) {
 	for i, k := range keys {
 		keyVals[k] = values[i]
 	}
-	r, _ = r.BulkInsert(byteKeys, values)
+	r, _ = r.Insert(byteKeys, values)
 	if r.Len() != len(keys) {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 	}
@@ -1922,7 +1922,7 @@ func TestBulkInsert(t *testing.T) {
 	for i, k := range keys {
 		byteKeys[i] = []byte(k)
 	}
-	r, _ = r.BulkInsert(byteKeys, values)
+	r, _ = r.Insert(byteKeys, values)
 	for i, _ := range byteKeys {
 		if val, ok := r.Get([]byte(keys[i])); !ok || val != keyVals[keys[i]] {
 			t.Fatalf("bad: %v %v %v", val, values[i], string(keys[i]))
@@ -1931,7 +1931,7 @@ func TestBulkInsert(t *testing.T) {
 	fmt.Println("hello")
 }
 
-func TestMultipleBulkInsert(t *testing.T) {
+func TestMultipleInsert(t *testing.T) {
 	r := New()
 
 	keys := []string{
@@ -1942,7 +1942,7 @@ func TestMultipleBulkInsert(t *testing.T) {
 		"zipzap",
 	}
 
-	// Insert all the keys using bulkInsert method
+	// Insert all the keys using Insert method
 	// create array of values
 	values := make([]interface{}, len(keys))
 	for i, _ := range keys {
@@ -1954,7 +1954,7 @@ func TestMultipleBulkInsert(t *testing.T) {
 		byteKeys[i] = []byte(k)
 	}
 
-	r, _ = r.BulkInsert(byteKeys, values)
+	r, _ = r.Insert(byteKeys, values)
 	if r.Len() != len(keys) {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 	}
@@ -1997,7 +1997,7 @@ func TestMultipleBulkInsert(t *testing.T) {
 		allKeys[k] = true
 	}
 
-	r, _ = r.BulkInsert(nkeys, vals)
+	r, _ = r.Insert(nkeys, vals)
 
 	if r.Len() != len(allKeys) {
 		t.Fatalf("bad len: %v %v", r.Len(), len(allKeys))
@@ -2050,7 +2050,7 @@ func BenchmarkInsertLotOfWords(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotOfWords(b *testing.B) {
+func BenchmarkInsertLotOfWords(b *testing.B) {
 	file, err := os.Open("words.txt")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -2082,7 +2082,7 @@ func BenchmarkBulkInsertLotOfWords(b *testing.B) {
 	b.ResetTimer()
 
 	r := New()
-	r, _ = r.BulkInsert(keys, vals)
+	r, _ = r.Insert(keys, vals)
 
 	for indx, line := range lines {
 		if val, ok := r.Get([]byte(line)); !ok || val != indx {
@@ -2108,7 +2108,7 @@ func BenchmarkInsertLotOfUUIDs(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotOfUUIDs(b *testing.B) {
+func BenchmarkInsertLotOfUUIDs(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
@@ -2120,7 +2120,7 @@ func BenchmarkBulkInsertLotOfUUIDs(b *testing.B) {
 	b.ResetTimer()
 
 	r := New()
-	r, _ = r.BulkInsert(keys, vals)
+	r, _ = r.Insert(keys, vals)
 }
 
 type TestObject struct {
@@ -2206,7 +2206,7 @@ func BenchmarkInsertLotOfUUIDsAndSearch(b *testing.B) {
 	}
 }
 
-func BenchmarkBulkInsertLotOfUUIDsAndSearch(b *testing.B) {
+func BenchmarkInsertLotOfUUIDsAndSearch(b *testing.B) {
 	keys := make([][]byte, 0)
 	vals := make([]interface{}, 0)
 	for i := 0; i < b.N; i++ {
@@ -2218,7 +2218,7 @@ func BenchmarkBulkInsertLotOfUUIDsAndSearch(b *testing.B) {
 	b.ResetTimer()
 
 	r := New()
-	r, _ = r.BulkInsert(keys, vals)
+	r, _ = r.Insert(keys, vals)
 
 	if r.Len() != b.N {
 		b.Fatalf("bad len: %v", r.Len())
