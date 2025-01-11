@@ -39,6 +39,16 @@ func New() *Tree {
 	return t
 }
 
+func NewWithData(keys [][]byte, vals []interface{}) *Tree {
+	t := &Tree{
+		root: &Node{
+			mutateCh: make(chan struct{}),
+		},
+	}
+	t.InitializeWithData(keys, vals)
+	return t
+}
+
 // Len is used to return the number of elements in the tree
 func (t *Tree) Len() int {
 	return t.size
@@ -828,6 +838,7 @@ func (t *Tree) InitializeWithData(keys [][]byte, vals []interface{}) (*Tree, int
 	}
 	txn := t.Txn()
 	newNodesAdded := txn.InitializeWithData(keys, vals)
+	t.size += newNodesAdded
 	return txn.Commit(), newNodesAdded
 }
 
