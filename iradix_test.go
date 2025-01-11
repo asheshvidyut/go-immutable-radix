@@ -1,10 +1,8 @@
 package iradix
 
 import (
-	"bufio"
 	"fmt"
 	"math/rand"
-	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -864,7 +862,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 			"zipzap",
 		}
 		for _, k := range keys {
-			r, _ = r.Insert([]byte(k), ni})
+			r, _, _ = r.Insert([]byte(k), nil)
 		}
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -888,7 +886,7 @@ func TestTrackMutate_SeekPrefixWatch(t *testing.T) {
 		// Write to a sub-child should trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+		txn.Insert([]byte("foobarbaz"), nil)
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1000,11 +998,9 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 			"foobar",
 			"zipzap",
 		}
-		byteKeys := make([][]byte, 0)
 		for _, k := range keys {
-			byteKeys = append(byteKeys, []byte(k))
+			r, _, _ = r.Insert([]byte(k), nil)
 		}
-		r, _ = r.Insert(byteKeys, []interface{}{nil, nil, nil, nil, nil})
 		if r.Len() != len(keys) {
 			t.Fatalf("bad len: %v %v", r.Len(), len(keys))
 		}
@@ -1035,7 +1031,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a sub-child should not trigger the leaf!
 		txn := r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+		txn.Insert([]byte("foobarbaz"), nil)
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1086,7 +1082,7 @@ func TestTrackMutate_GetWatch(t *testing.T) {
 		// Write to a exactly leaf should trigger the leaf!
 		txn = r.Txn()
 		txn.TrackMutate(true)
-		txn.Insert([][]byte{[]byte("foobar")}, []interface{}{nil})
+		txn.Insert([]byte("foobar"), nil)
 		switch i {
 		case 0:
 			r = txn.Commit()
@@ -1245,14 +1241,14 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("aaa%d", i)
-		r, _ = r.Insert([][]byte{[]byte(key)}, []interface{}{nil})
+		r, _, _ = r.Insert([]byte(key), nil)
 	}
 	for _, k := range keys {
-		r, _ = r.Insert([][]byte{[]byte(k)}, []interface{}{nil})
+		r, _, _ = r.Insert([]byte(k), nil)
 	}
 	for i := 0; i < defaultModifiedCache; i++ {
 		key := fmt.Sprintf("zzz%d", i)
-		r, _ = r.Insert([][]byte{[]byte(key)}, []interface{}{nil})
+		r, _, _ = r.Insert([]byte(key), nil)
 	}
 	if r.Len() != len(keys)+2*defaultModifiedCache {
 		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
@@ -1309,12 +1305,12 @@ func TestTrackMutate_HugeTxn(t *testing.T) {
 		key := fmt.Sprintf("zzz%d", i)
 		txn.Delete([]byte(key))
 	}
-	r, _ = r.Insert([][]byte{[]byte("zzz")}, []interface{}{nil})
+	txn.Insert([]byte("zzz"), nil)
 
 	// Hit the leaf, and add a child so we make multiple mutations to the
 	// same node.
-	txn.Insert([][]byte{[]byte("foobar")}, []interface{}{nil})
-	txn.Insert([][]byte{[]byte("foobarbaz")}, []interface{}{nil})
+	txn.Insert([]byte("foobar"), nil)
+	txn.Insert([]byte("foobarbaz"), nil)
 
 	// Commit and make sure we overflowed but didn't take on extra stuff.
 	r = txn.CommitOnly()
@@ -1871,362 +1867,5 @@ func TestClone(t *testing.T) {
 	}
 	if val, ok := t2.Get([]byte("baz")); !ok || val != 43 {
 		t.Fatalf("bad baz in t2")
-	}
-}
-
-func TestInsert(t *testing.T) {
-	r := New()
-
-	keys := []string{
-		"foobar",
-		"foo/bar/baz",
-		"foo/baz/bar",
-		"foo/zip/zap",
-		"zipzap",
-	}
-
-	// Insert all the keys using Insert method
-	// create array of values
-	values := make([]interface{}, len(keys))
-	for i, _ := range keys {
-		values[i] = i
-	}
-	// create keys of byte array [][]byte
-	byteKeys := make([][]byte, len(keys))
-	for i, k := range keys {
-		byteKeys[i] = []byte(k)
-	}
-	keyVals := make(map[string]interface{})
-	for i, k := range keys {
-		keyVals[k] = values[i]
-	}
-	r, _ = r.Insert(byteKeys, values)
-	if r.Len() != len(keys) {
-		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
-	}
-	for i, k := range keys {
-		if val, ok := r.Get([]byte(k)); !ok || val != i {
-			t.Fatalf("bad: %v", val)
-		}
-	}
-	for k, v := range keyVals {
-		keyVals[k] = v.(int) * 10
-	}
-	keys = make([]string, 0)
-	values = make([]interface{}, 0)
-	for k, v := range keyVals {
-		keys = append(keys, k)
-		values = append(values, v)
-	}
-	byteKeys = make([][]byte, len(keys))
-	for i, k := range keys {
-		byteKeys[i] = []byte(k)
-	}
-	r, _ = r.Insert(byteKeys, values)
-	for i, _ := range byteKeys {
-		if val, ok := r.Get([]byte(keys[i])); !ok || val != keyVals[keys[i]] {
-			t.Fatalf("bad: %v %v %v", val, values[i], string(keys[i]))
-		}
-	}
-	fmt.Println("hello")
-}
-
-func TestMultipleInsert(t *testing.T) {
-	r := New()
-
-	keys := []string{
-		"foobar",
-		"foo/bar/baz",
-		"foo/baz/bar",
-		"foo/zip/zap",
-		"zipzap",
-	}
-
-	// Insert all the keys using Insert method
-	// create array of values
-	values := make([]interface{}, len(keys))
-	for i, _ := range keys {
-		values[i] = i
-	}
-	// create keys of byte array [][]byte
-	byteKeys := make([][]byte, len(keys))
-	for i, k := range keys {
-		byteKeys[i] = []byte(k)
-	}
-
-	r, _ = r.Insert(byteKeys, values)
-	if r.Len() != len(keys) {
-		t.Fatalf("bad len: %v %v", r.Len(), len(keys))
-	}
-
-	file, err := os.Open("words.txt")
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	// Create a new scanner to read the file
-	scanner := bufio.NewScanner(file)
-
-	// Read the file line by line
-	var lines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		lines = append(lines, line)
-	}
-
-	nkeys := make([][]byte, 0)
-
-	for _, k := range lines {
-		nkeys = append(nkeys, []byte(k))
-	}
-
-	vals := make([]interface{}, len(nkeys))
-	for i, _ := range lines {
-		vals[i] = i
-	}
-
-	allKeys := make(map[string]bool)
-
-	for _, k := range keys {
-		allKeys[k] = true
-	}
-
-	for _, k := range lines {
-		allKeys[k] = true
-	}
-
-	r, _ = r.Insert(nkeys, vals)
-
-	if r.Len() != len(allKeys) {
-		t.Fatalf("bad len: %v %v", r.Len(), len(allKeys))
-	}
-
-	for i, k := range keys {
-		if val, ok := r.Get([]byte(k)); !ok || val != i {
-			t.Fatalf("bad: %v", val)
-		}
-	}
-	fmt.Println("hello")
-
-	for i, k := range nkeys {
-		if val, ok := r.Get(k); !ok || val != vals[i] {
-			t.Fatalf("bad: %v, %v", val, string(k))
-		}
-	}
-	fmt.Println("hello")
-}
-
-func BenchmarkInsertLotOfWords(b *testing.B) {
-	file, err := os.Open("words.txt")
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	// Create a new scanner to read the file
-	scanner := bufio.NewScanner(file)
-
-	// Read the file line by line
-	var lines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		lines = append(lines, line)
-	}
-
-	r := New()
-	b.ResetTimer()
-
-	for indx, line := range lines {
-		r, _, _ = r.Insert([]byte(line), indx)
-	}
-
-	for indx, line := range lines {
-		if val, ok := r.Get([]byte(line)); !ok || val != indx {
-			b.Fatalf("bad: %v", val)
-		}
-	}
-}
-
-func BenchmarkInsertLotOfWords(b *testing.B) {
-	file, err := os.Open("words.txt")
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	// Create a new scanner to read the file
-	scanner := bufio.NewScanner(file)
-
-	// Read the file line by line
-	var lines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		lines = append(lines, line)
-	}
-
-	keys := make([][]byte, 0)
-
-	for _, k := range lines {
-		keys = append(keys, []byte(k))
-	}
-
-	vals := make([]interface{}, len(keys))
-	for i, _ := range lines {
-		vals[i] = i
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	r, _ = r.Insert(keys, vals)
-
-	for indx, line := range lines {
-		if val, ok := r.Get([]byte(line)); !ok || val != indx {
-			b.Fatalf("bad: %v", val)
-		}
-	}
-}
-
-func BenchmarkInsertLotOfUUIDs(b *testing.B) {
-	keys := make([][]byte, 0)
-	vals := make([]interface{}, 0)
-	for i := 0; i < b.N; i++ {
-		key, _ := uuid.GenerateUUID()
-		keys = append(keys, []byte(key))
-		vals = append(vals, testObjWithId(i))
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	for i := 0; i < b.N; i++ {
-		r, _, _ = r.Insert(keys[i], vals[i])
-	}
-}
-
-func BenchmarkInsertLotOfUUIDs(b *testing.B) {
-	keys := make([][]byte, 0)
-	vals := make([]interface{}, 0)
-	for i := 0; i < b.N; i++ {
-		key, _ := uuid.GenerateUUID()
-		keys = append(keys, []byte(key))
-		vals = append(vals, testObjWithId(i))
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	r, _ = r.Insert(keys, vals)
-}
-
-type TestObject struct {
-	ID       string
-	Foo      string
-	Fu       *string
-	Boo      *string
-	Bar      int
-	Baz      string
-	Bam      *bool
-	Empty    string
-	Qux      []string
-	QuxEmpty []string
-	Zod      map[string]string
-	ZodEmpty map[string]string
-	Int      int
-	Int8     int8
-	Int16    int16
-	Int32    int32
-	Int64    int64
-	Uint     uint
-	Uint8    uint8
-	Uint16   uint16
-	Uint32   uint32
-	Uint64   uint64
-	Bool     bool
-}
-
-func String(s string) *string {
-	return &s
-}
-
-func testObjWithId(id int) *TestObject {
-	b := true
-	obj := &TestObject{
-		ID:  fmt.Sprintf("my-cool-obj-%d", id),
-		Foo: "Testing",
-		Fu:  String("Fu"),
-		Boo: nil,
-		Bar: 42,
-		Baz: "yep",
-		Bam: &b,
-		Qux: []string{"Test", "Test2"},
-		Zod: map[string]string{
-			"Role":          "Server",
-			"instance_type": "m3.medium",
-			"":              "asdf",
-		},
-		Int:    int(1),
-		Int8:   int8(-1 << 7),
-		Int16:  int16(-1 << 15),
-		Int32:  int32(-1 << 31),
-		Int64:  int64(-1 << 63),
-		Uint:   uint(1),
-		Uint8:  uint8(1<<8 - 1),
-		Uint16: uint16(1<<16 - 1),
-		Uint32: uint32(1<<32 - 1),
-		Uint64: uint64(1<<64 - 1),
-		Bool:   false,
-	}
-	return obj
-}
-
-func BenchmarkInsertLotOfUUIDsAndSearch(b *testing.B) {
-	keys := make([][]byte, 0)
-	vals := make([]interface{}, 0)
-	for i := 0; i < b.N; i++ {
-		key, _ := uuid.GenerateUUID()
-		keys = append(keys, []byte(key))
-		vals = append(vals, testObjWithId(i))
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	for i := 0; i < b.N; i++ {
-		r, _, _ = r.Insert(keys[i], vals[i])
-	}
-	for i := 0; i < b.N; i++ {
-		if val, ok := r.Get(keys[i]); !ok || val != vals[i] {
-			b.Fatalf("bad: %v", val)
-		}
-	}
-}
-
-func BenchmarkInsertLotOfUUIDsAndSearch(b *testing.B) {
-	keys := make([][]byte, 0)
-	vals := make([]interface{}, 0)
-	for i := 0; i < b.N; i++ {
-		key, _ := uuid.GenerateUUID()
-		keys = append(keys, []byte(key))
-		vals = append(vals, i)
-	}
-
-	b.ResetTimer()
-
-	r := New()
-	r, _ = r.Insert(keys, vals)
-
-	if r.Len() != b.N {
-		b.Fatalf("bad len: %v", r.Len())
-	}
-
-	for i := 0; i < b.N; i++ {
-		if val, ok := r.Get(keys[i]); !ok || vals[i] != val {
-			b.Fatalf("bad: %v %v", string(keys[i]), val)
-		}
 	}
 }
