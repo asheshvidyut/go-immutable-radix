@@ -246,8 +246,8 @@ func (t *Txn) mergeChild(n *Node) {
 	}
 }
 
-// insert does a recursive insertion
-func (t *Txn) bulkInsert(nc *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
+// Load is used to load data to a new tree
+func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
 	newNodesCount := 0
 	groups := make(map[byte][]int)
 
@@ -359,7 +359,7 @@ func (t *Txn) bulkInsert(nc *Node, keys [][]byte, searches []int, vals []interfa
 			searches[indx] += len(child.prefix)
 			if len(newEvalIndex) > 0 {
 				// Insert the group members that have been fully consumed
-				newChild, subUpdateCount := t.bulkInsert(child, keys, searches, vals, newEvalIndex)
+				newChild, subUpdateCount := t.initializeWithData(child, keys, searches, vals, newEvalIndex)
 				newNodesCount += subUpdateCount
 				if newChild != nil {
 					nc.edges[childIndx].node = newChild
@@ -644,7 +644,7 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 	values = values[:len(uniqueValues)]
 }
 
-func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
+func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
 	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
@@ -652,7 +652,7 @@ func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
 	for i := 0; i < len(keys); i++ {
 		evalIndex[i] = i
 	}
-	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals, evalIndex)
+	newRoot, newNodesCount := t.initializeWithData(t.root, keys, search, vals, evalIndex)
 	if newRoot != nil {
 		t.root = newRoot
 	}
@@ -819,9 +819,9 @@ func (t *Tree) Insert(k []byte, v interface{}) (*Tree, interface{}, bool) {
 	return txn.Commit(), old, ok
 }
 
-func (t *Tree) BulkInsert(keys [][]byte, vals []interface{}) (*Tree, int) {
+func (t *Tree) InitializeWithData(keys [][]byte, vals []interface{}) (*Tree, int) {
 	txn := t.Txn()
-	newNodesAdded := txn.BulkInsert(keys, vals)
+	newNodesAdded := txn.InitializeWithData(keys, vals)
 	return txn.Commit(), newNodesAdded
 }
 
