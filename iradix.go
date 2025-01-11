@@ -648,9 +648,9 @@ func (t *Txn) BulkInsert(keys [][]byte, vals []interface{}) int {
 	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
-	evalIndex := make([]int, 0)
+	evalIndex := make([]int, len(keys))
 	for i := 0; i < len(keys); i++ {
-		evalIndex = append(evalIndex, i)
+		evalIndex[i] = i
 	}
 	newRoot, newNodesCount := t.bulkInsert(t.root, keys, search, vals, evalIndex)
 	if newRoot != nil {
