@@ -257,39 +257,30 @@ func (t *Txn) mergeChild(n *Node) {
 }
 
 // Load is used to load data to a new tree
-func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals []interface{}, evalIndex []int) (*Node, int) {
+func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals []interface{}) (*Node, int) {
 	newNodesCount := 0
 	groups := make(map[byte][]int)
 
-	for idx, _ := range evalIndex {
-		indx := evalIndex[idx]
+	for indx, _ := range keys {
 		search := searches[indx]
 		if search == len(keys[indx]) {
-			didUpdate := false
-			if nc.isLeaf() {
-				didUpdate = true
-			}
 			nc.leaf = &leafNode{
 				mutateCh: make(chan struct{}),
 				key:      keys[indx],
 				val:      vals[indx],
 			}
-			if !didUpdate {
-				newNodesCount++
-			}
 			continue
 		}
-		label := keys[indx][search:][0]
-		_, child := nc.getEdge(label)
+		_, child := nc.getEdge(keys[indx][search:][0])
 		if child != nil {
-			if _, ok := groups[label]; !ok {
-				groups[label] = make([]int, 0)
+			if _, ok := groups[keys[indx][search:][0]]; !ok {
+				groups[keys[indx][search:][0]] = make([]int, 0)
 			}
-			groups[label] = append(groups[label], indx)
+			groups[keys[indx][search:][0]] = append(groups[keys[indx][search:][0]], indx)
 			continue
 		}
 		e := edge{
-			label: label,
+			label: keys[indx][search:][0],
 			node: &Node{
 				mutateCh: make(chan struct{}),
 				leaf: &leafNode{
@@ -307,8 +298,9 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 
 	for label, indices := range groups {
 		// First split the nodes and create all the new nodes
+		childIndx, child := nc.getEdge(label)
 		for _, indx := range indices {
-			_, child := nc.getEdge(label)
+			child = nc.edges[childIndx].node
 			if child != nil {
 				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
 				if commonPrefix < len(child.prefix) {
@@ -359,20 +351,32 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 				}
 			}
 		}
-		for _, indx := range indices {
-			childIndx, child := nc.getEdge(label)
-			newEvalIndex := make([]int, 0)
-			commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
-			if commonPrefix == len(child.prefix) {
-				newEvalIndex = append(newEvalIndex, indx)
+	}
+
+	for label, indices := range groups {
+		subGroupsAllConsumed := make([]int, 0)
+		childIdx, child := nc.getEdge(label)
+		if child != nil {
+			for _, indx := range indices {
+				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
+				if commonPrefix == len(child.prefix) {
+					subGroupsAllConsumed = append(subGroupsAllConsumed, indx)
+				}
 			}
-			searches[indx] += len(child.prefix)
-			if len(newEvalIndex) > 0 {
+			subKeys := make([][]byte, 0, len(subGroupsAllConsumed))
+			subVals := make([]interface{}, 0, len(subGroupsAllConsumed))
+			subSearches := make([]int, 0, len(subGroupsAllConsumed))
+			for _, indx := range subGroupsAllConsumed {
+				subKeys = append(subKeys, keys[indx])
+				subVals = append(subVals, vals[indx])
+				subSearches = append(subSearches, searches[indx]+len(child.prefix))
+			}
+			if len(subGroupsAllConsumed) > 0 {
 				// Insert the group members that have been fully consumed
-				newChild, subUpdateCount := t.initializeWithData(child, keys, searches, vals, newEvalIndex)
+				newChild, subUpdateCount := t.initializeWithData(child, subKeys, subSearches, subVals)
 				newNodesCount += subUpdateCount
 				if newChild != nil {
-					nc.edges[childIndx].node = newChild
+					nc.edges[childIdx].node = newChild
 				}
 			}
 		}
@@ -661,11 +665,7 @@ func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
 	//Validate if the keys are unique
 	sortKeysAndValues(keys, vals)
 	search := make([]int, len(keys))
-	evalIndex := make([]int, len(keys))
-	for i := 0; i < len(keys); i++ {
-		evalIndex[i] = i
-	}
-	newRoot, newNodesCount := t.initializeWithData(t.root, keys, search, vals, evalIndex)
+	newRoot, newNodesCount := t.initializeWithData(t.root, keys, search, vals)
 	if newRoot != nil {
 		t.root = newRoot
 	}
