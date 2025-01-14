@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
 )
@@ -280,17 +279,6 @@ func smallestCommonPrefixByteSlices(first []byte, second []byte) []byte {
 // Load is used to load data to a new tree
 func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, searches []int, vals []interface{}) *Node {
 	// Process leaf nodes
-	//for indx := range keys {
-	//	search := searches[indx]
-	//	if search == len(keys[indx]) {
-	//		nc.leaf = &leafNode{
-	//			mutateCh: make(chan struct{}),
-	//			key:      keys[indx],
-	//			val:      vals[indx],
-	//		}
-	//		t.size++
-	//	}
-	//}
 
 	for start <= end && searches[start] == len(keys[start]) {
 		start++
@@ -309,11 +297,11 @@ func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, search
 	// Initializing the labelStart
 	labelStart := keys[start][searches[start]:][0]
 	iterator := start
-	wg := &sync.WaitGroup{}
 	scp := keys[start][searches[start]:]
 
 	// Iterate over the keys between start and end
 	for iterator <= end {
+		// Ensure `searches[iterator]` is within bounds of `keys[iterator]`
 		labelIterator := keys[iterator][searches[iterator]:][0]
 
 		if labelIterator == labelStart {
@@ -352,14 +340,11 @@ func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, search
 		}
 
 		// Launch the recursive call for this range using goroutine
-		wg.Add(1)
-		go func(child *Node, start, end int) {
-			t.initializeWithData(child, start, end, keys, searches, vals)
-			wg.Done()
-		}(child, start, iterator-1)
+		t.initializeWithData(child, start, iterator-1, keys, searches, vals)
 
 		// Update start and labelStart for the next iteration
 		start = iterator
+		// Ensure `searches[iterator]` is within bounds of `keys[iterator]`
 		labelStart = keys[start][searches[start]:][0]
 		scp = keys[start][searches[start]:]
 		iterator = start
@@ -390,15 +375,12 @@ func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, search
 				t.size++
 			}
 		}
-		wg.Add(1)
-		go func(child *Node, start, end int) {
+		if start <= end {
 			t.initializeWithData(child, start, end, keys, searches, vals)
-			wg.Done()
-		}(child, start, end)
+		}
 	}
 
 	// Wait for all goroutines to complete
-	wg.Wait()
 	return nc
 }
 
