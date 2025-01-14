@@ -481,6 +481,30 @@ func TestLongestPrefix(t *testing.T) {
 	}
 }
 
+func TestTree_InitializeWithData(t *testing.T) {
+	keys := []string{
+		"foobar",
+		"foo/bar/baz",
+		"foo/baz/bar",
+		"foo/zip/zap",
+		"zipzap",
+	}
+	values := make([]interface{}, 0)
+	for _, ind := range keys {
+		values = append(values, ind)
+	}
+	byteKeys := make([][]byte, 0)
+	for ind, _ := range keys {
+		byteKeys = append(byteKeys, []byte(keys[ind]))
+	}
+	r := NewWithData(byteKeys, values)
+	for indx, _ := range byteKeys {
+		if val, ok := r.Get(byteKeys[indx]); !ok && val != values[indx] {
+			t.Fatalf("incorect value")
+		}
+	}
+}
+
 func TestWalkPrefix(t *testing.T) {
 	r := New()
 
