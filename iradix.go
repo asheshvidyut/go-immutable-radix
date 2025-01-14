@@ -318,14 +318,16 @@ func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, search
 			prefix:   scp,
 		}
 
-		// Add the edge to the node
-		nc.addEdge(edge{
+		ed := edge{
 			label: labelStart,
 			node:  node,
-		})
+		}
+
+		// Add the edge to the node
+		nc.edges = append(nc.edges, ed)
 
 		// Get the child node
-		_, child := nc.getEdge(labelStart)
+		child := ed.node
 
 		for itr := start; itr < iterator; itr++ {
 			searches[itr] += len(scp)
@@ -356,13 +358,14 @@ func (t *Txn) initializeWithData(nc *Node, start, end int, keys [][]byte, search
 			prefix:   scp,
 		}
 		// Add the edge to the node
-		nc.addEdge(edge{
+		ed := edge{
 			label: labelStart,
 			node:  node,
-		})
+		}
+		nc.edges = append(nc.edges, ed)
 
 		// Get the child node
-		_, child := nc.getEdge(labelStart)
+		child := ed.node
 
 		for itr := start; itr < iterator; itr++ {
 			searches[itr] += len(scp)
