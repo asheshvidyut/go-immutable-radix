@@ -2,7 +2,6 @@ package iradix
 
 import (
 	"bytes"
-	"sort"
 	"strings"
 
 	"github.com/hashicorp/golang-lru/simplelru"
@@ -473,60 +472,6 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 		t.size++
 	}
 	return oldVal, didUpdate
-}
-
-func sortKeysAndValues(keys [][]byte, values []interface{}) {
-	// Create a combined structure for sorting
-	type keyValue struct {
-		key   []byte
-		value interface{}
-		index int // Preserve original index
-	}
-
-	keyValues := make([]keyValue, len(keys))
-
-	// Populate the combined structure
-	for i := 0; i < len(keys); i++ {
-		keyValues[i] = keyValue{
-			key:   keys[i],
-			value: values[i],
-			index: i,
-		}
-	}
-
-	sort.Slice(keyValues, func(i, j int) bool {
-		// Compare based on length first
-		if len(keyValues[i].key) != len(keyValues[j].key) {
-			return len(keyValues[i].key) < len(keyValues[j].key)
-		}
-		// Then compare lexicographically
-		if cmp := bytes.Compare(keyValues[i].key, keyValues[j].key); cmp != 0 {
-			return cmp < 0
-		}
-		// Use the original index as a tie-breaker to ensure stability
-		return keyValues[i].index < keyValues[j].index // Lower index means earlier in input
-	})
-
-	// Create new slices for unique keys and values
-	uniqueKeys := make([][]byte, 0, len(keys))
-	uniqueValues := make([]interface{}, 0, len(values))
-
-	// Iterate through sorted keyValues and keep the last occurrence of each key
-	for i := 0; i < len(keyValues); i++ {
-		// If it's the last key or different from the next key, keep it
-		if i == len(keyValues)-1 || !bytes.Equal(keyValues[i].key, keyValues[i+1].key) {
-			uniqueKeys = append(uniqueKeys, keyValues[i].key)
-			uniqueValues = append(uniqueValues, keyValues[i].value)
-		}
-	}
-
-	// Replace original slices with unique ones
-	copy(keys, uniqueKeys)
-	copy(values, uniqueValues)
-
-	// Adjust slices to the new size
-	keys = keys[:len(uniqueKeys)]
-	values = values[:len(uniqueValues)]
 }
 
 func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
