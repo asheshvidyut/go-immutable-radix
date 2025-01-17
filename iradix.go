@@ -256,26 +256,6 @@ func (t *Txn) mergeChild(n *Node) {
 	}
 }
 
-// Function to find the smallest common prefix
-// Function to find the smallest common prefix for [][]byte
-func smallestCommonPrefixByteSlices(first []byte, second []byte) []byte {
-	minLength := len(first)
-	if len(second) < minLength {
-		minLength = len(second)
-	}
-
-	// Find the common prefix
-	for i := 0; i < minLength; i++ {
-		if first[i] != second[i] {
-			// Return the common prefix up to this point
-			return first[:i]
-		}
-	}
-
-	// If the entire shorter slice matches, return the entire shorter slice
-	return first[:minLength]
-}
-
 // Load is used to load data to a new tree
 func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals []interface{}) *Node {
 	if len(keys) == 0 {
