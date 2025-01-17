@@ -279,7 +279,6 @@ func smallestCommonPrefixByteSlices(first []byte, second []byte) []byte {
 // Load is used to load data to a new tree
 func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals []interface{}) *Node {
 	newNodesCount := 0
-	groups := make(map[byte][]int)
 
 	for indx, _ := range keys {
 		search := searches[indx]
@@ -289,14 +288,11 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 				key:      keys[indx],
 				val:      vals[indx],
 			}
+			t.size++
 			continue
 		}
 		_, child := nc.getEdge(keys[indx][search:][0])
 		if child != nil {
-			if _, ok := groups[keys[indx][search:][0]]; !ok {
-				groups[keys[indx][search:][0]] = make([]int, 0)
-			}
-			groups[keys[indx][search:][0]] = append(groups[keys[indx][search:][0]], indx)
 			continue
 		}
 		e := edge{
@@ -311,109 +307,114 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 				prefix: keys[indx][search:],
 			},
 		}
+		t.size++
 		searches[indx] = len(keys[indx])
 		newNodesCount++
 		nc.addEdge(e)
 	}
 
-	for _, indices := range groups {
-		// First split the nodes and create all the new nodes
-		for _, indx := range indices {
-			_, child := nc.getEdge(keys[indx][searches[indx]:][0])
-			if child != nil {
-				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
-				if commonPrefix < len(child.prefix) {
-					// Split the node
-					splitNode := &Node{
-						mutateCh: make(chan struct{}),
-						prefix:   keys[indx][searches[indx] : searches[indx]+commonPrefix],
-					}
-					nc.replaceEdge(edge{
-						label: keys[indx][searches[indx]:][0],
-						node:  splitNode,
-					})
-
-					// Restore the existing child node
-					modChild := child
-					splitNode.addEdge(edge{
-						label: modChild.prefix[commonPrefix],
-						node:  modChild,
-					})
-					modChild.prefix = modChild.prefix[commonPrefix:]
-
-					// Create a new leaf node
-					leaf := &leafNode{
-						mutateCh: make(chan struct{}),
-						key:      keys[indx],
-						val:      vals[indx],
-					}
-
-					newNodesCount++
-
-					// If the new key is a subset, add to to this node
-					searches[indx] += commonPrefix
-					if searches[indx] == len(keys[indx]) {
-						splitNode.leaf = leaf
-						continue
-					}
-
-					// Create a new edge for the node
-					splitNode.addEdge(edge{
-						label: keys[indx][searches[indx]:][0],
-						node: &Node{
-							mutateCh: make(chan struct{}),
-							leaf:     leaf,
-							prefix:   keys[indx][searches[indx]:],
-						},
-					})
-					searches[indx] = len(keys[indx])
-				}
-			}
-		}
-	}
-
-	groups = make(map[byte][]int)
-
 	for indx, _ := range keys {
-		search := searches[indx]
-		// Look for the edge
-		if search == len(keys[indx]) {
+		// First split the nodes and create all the new nodes
+		if searches[indx] == len(keys[indx]) {
 			continue
 		}
-		_, child := nc.getEdge(keys[indx][search:][0])
+		_, child := nc.getEdge(keys[indx][searches[indx]:][0])
 		if child != nil {
-			if _, ok := groups[keys[indx][search:][0]]; !ok {
-				groups[keys[indx][search:][0]] = make([]int, 0)
+			commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
+			if commonPrefix < len(child.prefix) {
+				// Split the node
+				splitNode := &Node{
+					mutateCh: make(chan struct{}),
+					prefix:   keys[indx][searches[indx] : searches[indx]+commonPrefix],
+				}
+				nc.replaceEdge(edge{
+					label: keys[indx][searches[indx]:][0],
+					node:  splitNode,
+				})
+
+				// Restore the existing child node
+				modChild := child
+				splitNode.addEdge(edge{
+					label: modChild.prefix[commonPrefix],
+					node:  modChild,
+				})
+				modChild.prefix = modChild.prefix[commonPrefix:]
+
+				// Create a new leaf node
+				leaf := &leafNode{
+					mutateCh: make(chan struct{}),
+					key:      keys[indx],
+					val:      vals[indx],
+				}
+				t.size++
+
+				newNodesCount++
+
+				// If the new key is a subset, add to to this node
+				searches[indx] += commonPrefix
+				if searches[indx] == len(keys[indx]) {
+					splitNode.leaf = leaf
+					continue
+				}
+
+				// Create a new edge for the node
+				splitNode.addEdge(edge{
+					label: keys[indx][searches[indx]:][0],
+					node: &Node{
+						mutateCh: make(chan struct{}),
+						leaf:     leaf,
+						prefix:   keys[indx][searches[indx]:],
+					},
+				})
+				searches[indx] = len(keys[indx])
 			}
-			groups[keys[indx][search:][0]] = append(groups[keys[indx][search:][0]], indx)
 		}
 	}
 
-	for label, indices := range groups {
-		subGroupsAllConsumed := make([]int, 0)
-		childIdx, child := nc.getEdge(label)
-		if child != nil {
-			for _, indx := range indices {
-				commonPrefix := longestPrefix(keys[indx][searches[indx]:], child.prefix)
-				if commonPrefix == len(child.prefix) {
-					subGroupsAllConsumed = append(subGroupsAllConsumed, indx)
-				}
-			}
-			subKeys := make([][]byte, 0, len(subGroupsAllConsumed))
-			subVals := make([]interface{}, 0, len(subGroupsAllConsumed))
-			subSearches := make([]int, 0, len(subGroupsAllConsumed))
-			for _, indx := range subGroupsAllConsumed {
-				subKeys = append(subKeys, keys[indx])
-				subVals = append(subVals, vals[indx])
-				subSearches = append(subSearches, searches[indx]+len(child.prefix))
-			}
-			if len(subGroupsAllConsumed) > 0 {
-				// Insert the group members that have been fully consumed
-				newChild := t.initializeWithData(child, subKeys, subSearches, subVals)
-				if newChild != nil {
-					nc.edges[childIdx].node = newChild
-				}
-			}
+	start := 0
+	for start < len(keys) && len(keys[start]) == searches[start] {
+		start++
+	}
+	if start == len(keys) {
+		return nc
+	}
+	startLabel := keys[start][searches[start]:][0]
+	subKeys := make([][]byte, 0)
+	subVals := make([]interface{}, 0)
+	subSearches := make([]int, 0)
+	indx := 0
+	chIndx, child := nc.getEdge(startLabel)
+	for indx < len(keys) {
+		if searches[indx] == len(keys[indx]) {
+			indx++
+			continue
+		}
+		label := keys[indx][searches[indx]:][0]
+		if label == startLabel {
+			subKeys = append(subKeys, keys[indx])
+			subVals = append(subVals, vals[indx])
+			subSearches = append(subSearches, searches[indx]+len(child.prefix))
+			indx++
+			continue
+		}
+		// Insert the group members that have been fully consumed
+		newChild := t.initializeWithData(child, subKeys, subSearches, subVals)
+		if newChild != nil {
+			nc.edges[chIndx].node = newChild
+		}
+		subKeys = make([][]byte, 0)
+		subVals = make([]interface{}, 0)
+		subSearches = make([]int, 0)
+		startLabel = keys[start][searches[start]:][0]
+		start = indx
+		startLabel = keys[start][searches[start]:][0]
+		chIndx, child = nc.getEdge(startLabel)
+	}
+
+	if len(subKeys) > 0 {
+		newChild := t.initializeWithData(child, subKeys, subSearches, subVals)
+		if newChild != nil {
+			nc.edges[chIndx].node = newChild
 		}
 	}
 
@@ -658,17 +659,17 @@ func sortKeysAndValues(keys [][]byte, values []interface{}) {
 		}
 	}
 
-	// Sort the combined structure
 	sort.Slice(keyValues, func(i, j int) bool {
-		// Compare based on length first, then lexicographically
-		//if len(keyValues[i].key) != len(keyValues[j].key) {
-		//	return len(keyValues[i].key) < len(keyValues[j].key)
-		//}
+		// Compare based on length first
+		if len(keyValues[i].key) != len(keyValues[j].key) {
+			return len(keyValues[i].key) < len(keyValues[j].key)
+		}
+		// Then compare lexicographically
 		if cmp := bytes.Compare(keyValues[i].key, keyValues[j].key); cmp != 0 {
 			return cmp < 0
 		}
 		// Use the original index as a tie-breaker to ensure stability
-		return keyValues[i].index > keyValues[j].index // Higher index means later in input
+		return keyValues[i].index < keyValues[j].index // Lower index means earlier in input
 	})
 
 	// Create new slices for unique keys and values
