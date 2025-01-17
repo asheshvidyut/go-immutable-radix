@@ -45,8 +45,8 @@ func NewWithData(keys [][]byte, vals []interface{}) *Tree {
 			mutateCh: make(chan struct{}),
 		},
 	}
-	t.InitializeWithData(keys, vals)
-	return t
+	newTree, _ := t.InitializeWithData(keys, vals)
+	return newTree
 }
 
 // Len is used to return the number of elements in the tree
@@ -707,11 +707,8 @@ func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
 		panic("InitializeWithData only works for empty tree")
 	}
 	//Validate if the keys are unique
-	sortKeysAndValues(keys, vals)
-	search := make([]int, len(keys))
-	newRoot := t.initializeWithData(t.root, keys, search, vals)
-	if newRoot != nil {
-		t.root = newRoot
+	for indx, key := range keys {
+		t.Insert(key, vals[indx])
 	}
 	return t.size
 }
@@ -881,7 +878,6 @@ func (t *Tree) InitializeWithData(keys [][]byte, vals []interface{}) (*Tree, int
 	}
 	txn := t.Txn()
 	newNodesAdded := txn.InitializeWithData(keys, vals)
-	t.size += newNodesAdded
 	return txn.Commit(), newNodesAdded
 }
 
