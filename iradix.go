@@ -284,18 +284,10 @@ func (t *Txn) initializeWithData(nc *Node, keys [][]byte, searches []int, vals [
 	for indx, _ := range keys {
 		search := searches[indx]
 		if search == len(keys[indx]) {
-			didUpdate := false
-			if nc.isLeaf() {
-				didUpdate = true
-			}
-			nc = t.writeNode(nc, true)
 			nc.leaf = &leafNode{
 				mutateCh: make(chan struct{}),
 				key:      keys[indx],
 				val:      vals[indx],
-			}
-			if !didUpdate {
-				newNodesCount++
 			}
 			continue
 		}
