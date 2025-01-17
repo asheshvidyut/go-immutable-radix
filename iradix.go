@@ -44,7 +44,7 @@ func NewWithData(keys [][]byte, vals []interface{}) *Tree {
 			mutateCh: make(chan struct{}),
 		},
 	}
-	newTree, _ := t.InitializeWithData(keys, vals)
+	newTree, _ := t.initializeWithData(keys, vals)
 	return newTree
 }
 
@@ -474,9 +474,9 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 	return oldVal, didUpdate
 }
 
-func (t *Txn) InitializeWithData(keys [][]byte, vals []interface{}) int {
+func (t *Txn) initializeWithData(keys [][]byte, vals []interface{}) int {
 	if t.size > 0 {
-		panic("InitializeWithData only works for empty tree")
+		panic("initializeWithData only works for empty tree")
 	}
 	//Validate if the keys are unique
 	for indx, key := range keys {
@@ -644,12 +644,12 @@ func (t *Tree) Insert(k []byte, v interface{}) (*Tree, interface{}, bool) {
 	return txn.Commit(), old, ok
 }
 
-func (t *Tree) InitializeWithData(keys [][]byte, vals []interface{}) (*Tree, int) {
+func (t *Tree) initializeWithData(keys [][]byte, vals []interface{}) (*Tree, int) {
 	if t.size > 0 {
-		panic("InitializeWithData can only be called on an empty tree")
+		panic("initializeWithData can only be called on an empty tree")
 	}
 	txn := t.Txn()
-	newNodesAdded := txn.InitializeWithData(keys, vals)
+	newNodesAdded := txn.initializeWithData(keys, vals)
 	return txn.Commit(), newNodesAdded
 }
 
