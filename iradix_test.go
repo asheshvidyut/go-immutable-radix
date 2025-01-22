@@ -498,6 +498,9 @@ func TestTree_InitializeWithData(t *testing.T) {
 		byteKeys = append(byteKeys, []byte(keys[ind]))
 	}
 	r := NewWithData(byteKeys, values)
+	if r.Len() != 5 {
+		t.Fatalf("bad len: %v", r.Len())
+	}
 	for indx, _ := range byteKeys {
 		if val, ok := r.Get(byteKeys[indx]); !ok && val != values[indx] {
 			t.Fatalf("incorect value")

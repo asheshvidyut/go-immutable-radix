@@ -39,12 +39,8 @@ func New() *Tree {
 }
 
 func NewWithData(keys [][]byte, vals []interface{}) *Tree {
-	t := &Tree{
-		root: &Node{
-			mutateCh: make(chan struct{}),
-		},
-	}
-	newTree, _ := t.initializeWithData(keys, vals)
+	tree := New()
+	newTree, _ := tree.initializeWithData(keys, vals)
 	return newTree
 }
 
@@ -475,9 +471,6 @@ func (t *Txn) Insert(k []byte, v interface{}) (interface{}, bool) {
 }
 
 func (t *Txn) initializeWithData(keys [][]byte, vals []interface{}) int {
-	if t.size > 0 {
-		panic("initializeWithData only works for empty tree")
-	}
 	//Validate if the keys are unique
 	for indx, key := range keys {
 		t.Insert(key, vals[indx])
@@ -645,9 +638,6 @@ func (t *Tree) Insert(k []byte, v interface{}) (*Tree, interface{}, bool) {
 }
 
 func (t *Tree) initializeWithData(keys [][]byte, vals []interface{}) (*Tree, int) {
-	if t.size > 0 {
-		panic("initializeWithData can only be called on an empty tree")
-	}
 	txn := t.Txn()
 	newNodesAdded := txn.initializeWithData(keys, vals)
 	return txn.Commit(), newNodesAdded
